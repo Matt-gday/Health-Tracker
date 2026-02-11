@@ -357,6 +357,7 @@ const DB = {
     const [start, end] = this._localDayRange(dateStr);
     const events = await this.getEventsInRange(start, end, 'food');
     return {
+      calories: events.reduce((s, e) => s + (e.calories || 0), 0),
       protein_g: events.reduce((s, e) => s + (e.protein_g || 0), 0),
       carbs_g: events.reduce((s, e) => s + (e.carbs_g || 0), 0),
       fat_g: events.reduce((s, e) => s + (e.fat_g || 0), 0),
@@ -438,6 +439,7 @@ const DB = {
       },
       food: {
         count: foodEvents.length,
+        calories: foodEvents.reduce((s, e) => s + (e.calories || 0), 0),
         protein: foodEvents.reduce((s, e) => s + (e.protein_g || 0), 0),
         carbs: foodEvents.reduce((s, e) => s + (e.carbs_g || 0), 0),
         fat: foodEvents.reduce((s, e) => s + (e.fat_g || 0), 0),
@@ -445,6 +447,7 @@ const DB = {
       },
       drink: {
         totalMl: drinkEvents.reduce((s, e) => s + (e.volume_ml || 0), 0),
+        calories: drinkEvents.reduce((s, e) => s + (e.calories || 0), 0),
         caffeine: drinkEvents.reduce((s, e) => s + (e.caffeine_mg || 0), 0),
         count: drinkEvents.length
       },

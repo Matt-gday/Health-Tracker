@@ -970,6 +970,47 @@ textarea.form-input {
   font-size: var(--font-sm);
 }
 
+/* --- Update Banner --- */
+.update-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: linear-gradient(135deg, #002244, #00697C);
+  color: #fff;
+  font-size: var(--font-sm);
+  font-weight: 500;
+  text-align: center;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 400;
+  padding-top: calc(var(--safe-area-top) + var(--space-sm));
+  animation: bannerSlideIn 0.4s ease;
+}
+.update-banner button {
+  background: #04D1D4;
+  color: #002244;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 6px 14px;
+  font-size: var(--font-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.update-banner button.dismiss {
+  background: transparent;
+  color: rgba(255,255,255,0.7);
+  padding: 6px 8px;
+  font-size: 16px;
+}
+@keyframes bannerSlideIn {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(0); }
+}
+
 /* --- Toast Notification --- */
 .toast-container {
   position: fixed;

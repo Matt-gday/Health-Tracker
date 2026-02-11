@@ -45,6 +45,13 @@ const UI = {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   },
 
+  /* Convert an ISO timestamp to a local YYYY-MM-DD string */
+  localDateKey(iso) {
+    if (!iso) return 'unknown';
+    const d = new Date(iso);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  },
+
   localISOString(date) {
     const d = date || new Date();
     const offset = d.getTimezoneOffset();
@@ -179,12 +186,15 @@ const UI = {
 
     // Food
     if (s.food.count > 0) {
-      items.push({ icon: 'utensils', label: 'Food', value: `P:${Math.round(s.food.protein)}g · F:${Math.round(s.food.fat)}g · C:${Math.round(s.food.carbs)}g`, cls: '', filter: 'food' });
+      let foodVal = s.food.calories > 0 ? `${Math.round(s.food.calories)} kcal · ` : '';
+      foodVal += `P:${Math.round(s.food.protein)}g · F:${Math.round(s.food.fat)}g · C:${Math.round(s.food.carbs)}g`;
+      items.push({ icon: 'utensils', label: 'Food', value: foodVal, cls: '', filter: 'food' });
     }
 
     // Drink
     if (s.drink.totalMl > 0) {
       let val = `${s.drink.totalMl.toLocaleString()} mL`;
+      if (s.drink.calories > 0) val += ` · ${Math.round(s.drink.calories)} kcal`;
       if (s.drink.caffeine > 0) val += ` · ☕ ${Math.round(s.drink.caffeine)}mg`;
       items.push({ icon: 'droplets', label: 'Drink', value: val, cls: '', filter: 'drink' });
     }
@@ -250,10 +260,10 @@ const UI = {
       return;
     }
 
-    // Group by date
+    // Group by local date (not UTC) so headings match the user's timezone
     const grouped = {};
     events.forEach(e => {
-      const dateKey = e.timestamp ? e.timestamp.split('T')[0] : 'unknown';
+      const dateKey = this.localDateKey(e.timestamp);
       if (!grouped[dateKey]) grouped[dateKey] = [];
       grouped[dateKey].push(e);
     });
@@ -369,13 +379,13 @@ const UI = {
         return {
           icon: 'utensils', iconClass: 'food',
           title: event.foodName || 'Food',
-          subtitle: `P:${event.protein_g || 0}g  C:${event.carbs_g || 0}g  F:${event.fat_g || 0}g`
+          subtitle: `${event.calories ? event.calories + ' kcal · ' : ''}P:${event.protein_g || 0}g  C:${event.carbs_g || 0}g  F:${event.fat_g || 0}g`
         };
       case 'drink':
         return {
           icon: 'droplets', iconClass: 'drink',
           title: event.drinkName || 'Drink',
-          subtitle: `${event.volume_ml || 0} mL${event.caffeine_mg ? '  ☕ ' + event.caffeine_mg + 'mg' : ''}`
+          subtitle: `${event.volume_ml || 0} mL${event.calories ? ' · ' + event.calories + ' kcal' : ''}${event.caffeine_mg ? '  ☕ ' + event.caffeine_mg + 'mg' : ''}`
         };
       case 'medication':
         return {
@@ -530,6 +540,10 @@ const UI = {
         <label>Quantity (multiplier)</label>
         <input type="number" step="0.25" class="form-input" id="food-quantity" placeholder="1" value="${data.quantity || 1}" inputmode="decimal">
       </div>
+      <div class="form-group">
+        <label>Calories (kcal)</label>
+        <input type="number" step="1" class="form-input" id="food-calories" placeholder="0" value="${data.calories || ''}" inputmode="numeric">
+      </div>
       <div class="input-row">
         <div class="form-group">
           <label>Protein (g)</label>
@@ -575,8 +589,22 @@ const UI = {
       </div>
       <input type="hidden" id="drink-library-id" value="${data.drinkId || ''}">
       <div class="form-group">
+        <label>Ingredients</label>
+        <textarea class="form-input" id="drink-ingredients" placeholder="e.g. collagen, cream, salt...">${data.ingredients || ''}</textarea>
+      </div>
+      <div class="form-group">
         <label>Volume (mL)</label>
         <input type="number" step="25" class="form-input form-input-large" id="drink-volume" placeholder="250" value="${data.volume_ml || 250}" inputmode="numeric">
+      </div>
+      <div class="input-row">
+        <div class="form-group">
+          <label>Calories (kcal)</label>
+          <input type="number" step="1" class="form-input" id="drink-calories" placeholder="0" value="${data.calories || ''}" inputmode="numeric">
+        </div>
+        <div class="form-group">
+          <label>Caffeine (mg)</label>
+          <input type="number" step="1" class="form-input" id="drink-caffeine" placeholder="0" value="${data.caffeine_mg || ''}" inputmode="numeric">
+        </div>
       </div>
       <div class="input-row">
         <div class="form-group">
@@ -597,13 +625,6 @@ const UI = {
           <label>Sodium (mg)</label>
           <input type="number" step="1" class="form-input" id="drink-sodium" placeholder="0" value="${data.sodium_mg || ''}" inputmode="numeric">
         </div>
-      </div>
-      <div class="input-row">
-        <div class="form-group">
-          <label>Caffeine (mg)</label>
-          <input type="number" step="1" class="form-input" id="drink-caffeine" placeholder="0" value="${data.caffeine_mg || ''}" inputmode="numeric">
-        </div>
-        <div class="form-group"></div>
       </div>
       <div class="form-group">
         <label>Date & Time</label>
@@ -805,6 +826,7 @@ const UI = {
           </div>
           <div class="settings-item" onclick="App.checkForUpdates()">
             <div class="settings-label"><i data-lucide="refresh-cw"></i><span>Check for Updates</span></div>
+            <span style="font-size:var(--font-xs);color:var(--text-tertiary)">v${App.APP_VERSION}</span>
             <i data-lucide="chevron-right" class="chevron"></i>
           </div>
         </div>
@@ -882,11 +904,11 @@ const UI = {
     // Chart placeholder
     html += '<div class="chart-container"><canvas id="detail-chart"></canvas></div>';
 
-    // Events list — grouped by date
+    // Events list — grouped by local date
     if (events && events.length > 0) {
       const grouped = {};
       events.forEach(e => {
-        const dateKey = e.timestamp ? e.timestamp.split('T')[0] : 'unknown';
+        const dateKey = this.localDateKey(e.timestamp);
         if (!grouped[dateKey]) grouped[dateKey] = [];
         grouped[dateKey].push(e);
       });

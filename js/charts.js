@@ -7,6 +7,19 @@ const Charts = {
   _dashboardChart: null,
   _detailChart: null,
 
+  /* Convert an ISO timestamp to a local YYYY-MM-DD string */
+  _localDateKey(iso) {
+    const d = new Date(iso);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  },
+
+  /* Generate a local YYYY-MM-DD for N days ago */
+  _localDayStr(daysAgo) {
+    const d = new Date();
+    d.setDate(d.getDate() - daysAgo);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  },
+
   /* ---------- Dashboard Chart ---------- */
   async renderDashboard(layers, range) {
     const canvas = document.getElementById('dashboard-chart');
@@ -273,13 +286,11 @@ const Charts = {
     const now = new Date();
     const days = [];
     for (let i = 29; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(d.getDate() - i);
-      days.push(d.toISOString().split('T')[0]);
+      days.push(this._localDayStr(i));
     }
     const countByDay = {};
     events.filter(e => e.endTime).forEach(e => {
-      const day = e.timestamp.split('T')[0];
+      const day = this._localDateKey(e.timestamp);
       countByDay[day] = (countByDay[day] || 0) + 1;
     });
 
@@ -302,7 +313,7 @@ const Charts = {
   _buildActivityChart(events) {
     const walks = events.filter(e => e.eventType === 'walk' && e.duration_min);
     const steps = events.filter(e => e.eventType === 'steps');
-    const allDates = [...new Set([...walks, ...steps].map(e => (e.date || e.timestamp.split('T')[0])))].sort().slice(-14);
+    const allDates = [...new Set([...walks, ...steps].map(e => (e.date || this._localDateKey(e.timestamp))))].sort().slice(-14);
 
     return {
       type: 'bar',
@@ -312,7 +323,7 @@ const Charts = {
           {
             label: 'Walk (min)',
             data: allDates.map(d => {
-              const w = walks.find(e => e.timestamp.startsWith(d));
+              const w = walks.find(e => this._localDateKey(e.timestamp) === d);
               return w ? w.duration_min : 0;
             }),
             backgroundColor: 'rgba(16,185,129,0.6)',
@@ -346,13 +357,15 @@ const Charts = {
     // Daily macro totals for last 7 days
     const days = [];
     for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      days.push(d.toISOString().split('T')[0]);
+      days.push(this._localDayStr(i));
     }
+    // Group events by local date
+    const byDay = {};
+    events.forEach(e => { const dk = this._localDateKey(e.timestamp); if (!byDay[dk]) byDay[dk] = []; byDay[dk].push(e); });
     const dailyData = days.map(day => {
-      const dayEvents = events.filter(e => e.timestamp.startsWith(day));
+      const dayEvents = byDay[day] || [];
       return {
+        calories: dayEvents.reduce((s, e) => s + (e.calories || 0), 0),
         protein: dayEvents.reduce((s, e) => s + (e.protein_g || 0), 0),
         carbs: dayEvents.reduce((s, e) => s + (e.carbs_g || 0), 0),
         fat: dayEvents.reduce((s, e) => s + (e.fat_g || 0), 0)
@@ -362,33 +375,43 @@ const Charts = {
     return {
       type: 'bar',
       data: {
-        labels: days.map(d => { const dt = new Date(d); return `${dt.getDate()}/${dt.getMonth() + 1}`; }),
+        labels: days.map(d => { const dt = new Date(d + 'T12:00:00'); return `${dt.getDate()}/${dt.getMonth() + 1}`; }),
         datasets: [
-          { label: 'Protein (g)', data: dailyData.map(d => Math.round(d.protein)), backgroundColor: 'rgba(16,185,129,0.6)', borderRadius: 3 },
-          { label: 'Carbs (g)', data: dailyData.map(d => Math.round(d.carbs)), backgroundColor: 'rgba(59,130,246,0.6)', borderRadius: 3 },
-          { label: 'Fat (g)', data: dailyData.map(d => Math.round(d.fat)), backgroundColor: 'rgba(245,158,11,0.6)', borderRadius: 3 }
+          { label: 'Calories', data: dailyData.map(d => Math.round(d.calories)), type: 'line', borderColor: '#EF4444', backgroundColor: 'rgba(239,68,68,0.1)', tension: 0.3, pointRadius: 3, borderWidth: 2, yAxisID: 'y1', fill: false },
+          { label: 'Protein (g)', data: dailyData.map(d => Math.round(d.protein)), backgroundColor: 'rgba(16,185,129,0.6)', borderRadius: 3, yAxisID: 'y' },
+          { label: 'Carbs (g)', data: dailyData.map(d => Math.round(d.carbs)), backgroundColor: 'rgba(59,130,246,0.6)', borderRadius: 3, yAxisID: 'y' },
+          { label: 'Fat (g)', data: dailyData.map(d => Math.round(d.fat)), backgroundColor: 'rgba(245,158,11,0.6)', borderRadius: 3, yAxisID: 'y' }
         ]
       },
-      options: { ...this._defaultChartOptions(), plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } } }
+      options: {
+        ...this._defaultChartOptions(),
+        scales: {
+          x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 0 } },
+          y: { position: 'left', grid: { color: '#F3F4F6' }, title: { display: true, text: 'Macros (g)', font: { size: 10 } } },
+          y1: { position: 'right', grid: { display: false }, title: { display: true, text: 'Calories', font: { size: 10 } } }
+        },
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } }
+      }
     };
   },
 
   _buildDrinkChart(events) {
     const days = [];
     for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      days.push(d.toISOString().split('T')[0]);
+      days.push(this._localDayStr(i));
     }
+    // Group events by local date
+    const byDay = {};
+    events.forEach(e => { const dk = this._localDateKey(e.timestamp); if (!byDay[dk]) byDay[dk] = []; byDay[dk].push(e); });
 
     return {
       type: 'bar',
       data: {
-        labels: days.map(d => { const dt = new Date(d); return `${dt.getDate()}/${dt.getMonth() + 1}`; }),
+        labels: days.map(d => { const dt = new Date(d + 'T12:00:00'); return `${dt.getDate()}/${dt.getMonth() + 1}`; }),
         datasets: [{
           label: 'Fluid (mL)',
           data: days.map(day => {
-            return events.filter(e => e.timestamp.startsWith(day)).reduce((s, e) => s + (e.volume_ml || 0), 0);
+            return (byDay[day] || []).reduce((s, e) => s + (e.volume_ml || 0), 0);
           }),
           backgroundColor: 'rgba(0,179,183,0.5)',
           borderColor: '#00B3B7',
@@ -404,10 +427,16 @@ const Charts = {
     const medOnly = events.filter(e => e.eventType === 'medication');
     const days = [];
     for (let i = 13; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      days.push(d.toISOString().split('T')[0]);
+      days.push(this._localDayStr(i));
     }
+
+    // Group meds by local date
+    const medsByDay = {};
+    medOnly.forEach(e => {
+      const dk = this._localDateKey(e.timestamp);
+      if (!medsByDay[dk]) medsByDay[dk] = [];
+      medsByDay[dk].push(e);
+    });
 
     // For each day, count AM taken/skipped and PM taken/skipped
     const amTaken = [];
@@ -416,7 +445,7 @@ const Charts = {
     const pmSkipped = [];
 
     days.forEach(day => {
-      const dayMeds = medOnly.filter(e => e.timestamp.startsWith(day));
+      const dayMeds = medsByDay[day] || [];
       const am = dayMeds.filter(e => e.timeOfDay === 'AM');
       const pm = dayMeds.filter(e => e.timeOfDay === 'PM');
 
@@ -525,7 +554,7 @@ const Charts = {
     const labels = [];
     const d = new Date(start);
     while (d <= end) {
-      labels.push(d.toISOString().split('T')[0]);
+      labels.push(this._localDateKey(d.toISOString()));
       d.setDate(d.getDate() + 1);
     }
     return labels;
@@ -539,10 +568,10 @@ const Charts = {
   },
 
   _mapToLabels(events, labels, field, transform = null) {
-    // Group events by date and average
+    // Group events by local date and average
     const byDate = {};
     events.forEach(e => {
-      const day = e.timestamp.split('T')[0];
+      const day = this._localDateKey(e.timestamp);
       if (!byDate[day]) byDate[day] = [];
       let val = e[field];
       if (transform) val = transform(val);

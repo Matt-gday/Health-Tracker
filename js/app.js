@@ -4,6 +4,7 @@
    ============================================ */
 
 const App = {
+  APP_VERSION: '1.5.0',
   currentTab: 'home',
   previousPages: [],
   historyFilters: ['all'],
@@ -21,7 +22,8 @@ const App = {
       await this.renderCurrentTab();
       await this.checkMedicationReminders();
       this.setupToggleGroupListeners();
-      console.log('Heart Tracker initialized');
+      this._autoCheckForUpdates();
+      console.log('Heart Tracker v' + this.APP_VERSION + ' initialized');
     } catch (err) {
       console.error('Init failed:', err);
       UI.showToast('Failed to initialize app', 'error');
@@ -427,7 +429,7 @@ const App = {
     list.innerHTML = results.map(item => `
       <div class="autocomplete-item" onclick="App.selectFoodLibraryItem('${item.id}')">
         <div class="item-name">${item.name}</div>
-        <div class="item-detail">P:${item.protein_g || 0}g C:${item.carbs_g || 0}g F:${item.fat_g || 0}g Na:${item.sodium_mg || 0}mg</div>
+        <div class="item-detail">${item.calories ? item.calories + ' kcal · ' : ''}P:${item.protein_g || 0}g C:${item.carbs_g || 0}g F:${item.fat_g || 0}g</div>
       </div>`).join('');
     list.classList.add('visible');
   },
@@ -439,6 +441,7 @@ const App = {
     document.getElementById('food-library-id').value = item.id;
     document.getElementById('food-ingredients').value = item.ingredients || '';
     document.getElementById('food-serving-desc').value = item.servingDescription || '';
+    document.getElementById('food-calories').value = item.calories || '';
     document.getElementById('food-protein').value = item.protein_g || '';
     document.getElementById('food-carbs').value = item.carbs_g || '';
     document.getElementById('food-fat').value = item.fat_g || '';
@@ -454,6 +457,7 @@ const App = {
     }
 
     const quantity = parseFloat(document.getElementById('food-quantity').value) || 1;
+    const calories_per = parseFloat(document.getElementById('food-calories').value) || 0;
     const protein_per = parseFloat(document.getElementById('food-protein').value) || 0;
     const carbs_per = parseFloat(document.getElementById('food-carbs').value) || 0;
     const fat_per = parseFloat(document.getElementById('food-fat').value) || 0;
@@ -467,6 +471,7 @@ const App = {
         name: foodName,
         ingredients: document.getElementById('food-ingredients').value.trim(),
         servingDescription: document.getElementById('food-serving-desc').value.trim(),
+        calories: calories_per,
         protein_g: protein_per,
         carbs_g: carbs_per,
         fat_g: fat_per,
@@ -482,6 +487,7 @@ const App = {
       quantity,
       servingDescription: document.getElementById('food-serving-desc').value.trim(),
       ingredients: document.getElementById('food-ingredients').value.trim(),
+      calories: Math.round(calories_per * quantity),
       protein_g: Math.round(protein_per * quantity * 10) / 10,
       carbs_g: Math.round(carbs_per * quantity * 10) / 10,
       fat_g: Math.round(fat_per * quantity * 10) / 10,
@@ -545,7 +551,9 @@ const App = {
     if (!item) return;
     document.getElementById('drink-search').value = item.name;
     document.getElementById('drink-library-id').value = item.id;
+    document.getElementById('drink-ingredients').value = item.ingredients || '';
     document.getElementById('drink-volume').value = item.defaultVolume_ml || 250;
+    document.getElementById('drink-calories').value = item.calories || '';
     document.getElementById('drink-protein').value = item.protein_g || '';
     document.getElementById('drink-carbs').value = item.carbs_g || '';
     document.getElementById('drink-fat').value = item.fat_g || '';
@@ -564,10 +572,15 @@ const App = {
     const volume_ml = parseInt(document.getElementById('drink-volume').value) || 250;
     let drinkId = document.getElementById('drink-library-id').value;
 
+    const ingredients = document.getElementById('drink-ingredients').value.trim();
+    const calories = parseFloat(document.getElementById('drink-calories').value) || 0;
+
     if (!drinkId) {
       const libItem = await DB.addDrinkItem({
         name: drinkName,
+        ingredients,
         defaultVolume_ml: volume_ml,
+        calories,
         protein_g: parseFloat(document.getElementById('drink-protein').value) || 0,
         carbs_g: parseFloat(document.getElementById('drink-carbs').value) || 0,
         fat_g: parseFloat(document.getElementById('drink-fat').value) || 0,
@@ -581,7 +594,9 @@ const App = {
       eventType: 'drink',
       drinkId,
       drinkName,
+      ingredients,
       volume_ml,
+      calories,
       protein_g: parseFloat(document.getElementById('drink-protein').value) || 0,
       carbs_g: parseFloat(document.getElementById('drink-carbs').value) || 0,
       fat_g: parseFloat(document.getElementById('drink-fat').value) || 0,
@@ -1094,7 +1109,7 @@ const App = {
             <div class="entry-icon ${type}"><i data-lucide="${type === 'food' ? 'utensils' : 'droplets'}"></i></div>
             <div class="entry-body">
               <div class="entry-title">${item.name}</div>
-              <div class="entry-subtitle">P:${item.protein_g || 0}g C:${item.carbs_g || 0}g F:${item.fat_g || 0}g Na:${item.sodium_mg || 0}mg Caff:${item.caffeine_mg || 0}mg</div>
+              <div class="entry-subtitle">${item.calories ? item.calories + ' kcal · ' : ''}P:${item.protein_g || 0}g C:${item.carbs_g || 0}g F:${item.fat_g || 0}g${item.caffeine_mg ? ' · ☕' + item.caffeine_mg + 'mg' : ''}</div>
             </div>
             <i data-lucide="chevron-right" style="width:16px;height:16px;color:var(--text-tertiary)"></i>
           </div>`;
@@ -1114,6 +1129,7 @@ const App = {
         <div class="form-group"><label>Name</label><input type="text" class="form-input" id="lib-name" value="${item.name}"></div>
         <div class="form-group"><label>Ingredients</label><textarea class="form-input" id="lib-ingredients">${item.ingredients || ''}</textarea></div>
         <div class="form-group"><label>Serving Description</label><input type="text" class="form-input" id="lib-serving" value="${item.servingDescription || ''}"></div>
+        <div class="form-group"><label>Calories (kcal)</label><input type="number" class="form-input" id="lib-calories" value="${item.calories || 0}"></div>
         <div class="input-row">
           <div class="form-group"><label>Protein (g)</label><input type="number" class="form-input" id="lib-protein" value="${item.protein_g || 0}"></div>
           <div class="form-group"><label>Carbs (g)</label><input type="number" class="form-input" id="lib-carbs" value="${item.carbs_g || 0}"></div>
@@ -1125,7 +1141,9 @@ const App = {
     } else {
       body = `
         <div class="form-group"><label>Name</label><input type="text" class="form-input" id="lib-name" value="${item.name}"></div>
+        <div class="form-group"><label>Ingredients</label><textarea class="form-input" id="lib-ingredients">${item.ingredients || ''}</textarea></div>
         <div class="form-group"><label>Default Volume (mL)</label><input type="number" class="form-input" id="lib-volume" value="${item.defaultVolume_ml || 250}"></div>
+        <div class="form-group"><label>Calories (kcal)</label><input type="number" class="form-input" id="lib-calories" value="${item.calories || 0}"></div>
         <div class="input-row">
           <div class="form-group"><label>Protein (g)</label><input type="number" class="form-input" id="lib-protein" value="${item.protein_g || 0}"></div>
           <div class="form-group"><label>Carbs (g)</label><input type="number" class="form-input" id="lib-carbs" value="${item.carbs_g || 0}"></div>
@@ -1147,13 +1165,16 @@ const App = {
   async saveLibraryItem(type, id) {
     const updates = {
       name: document.getElementById('lib-name').value.trim(),
+      calories: parseFloat(document.getElementById('lib-calories').value) || 0,
       protein_g: parseFloat(document.getElementById('lib-protein').value) || 0,
       carbs_g: parseFloat(document.getElementById('lib-carbs').value) || 0,
       fat_g: parseFloat(document.getElementById('lib-fat').value) || 0,
       sodium_mg: parseFloat(document.getElementById('lib-sodium').value) || 0
     };
+    // Both food and drink now have ingredients
+    const ingredientsEl = document.getElementById('lib-ingredients');
+    if (ingredientsEl) updates.ingredients = ingredientsEl.value.trim();
     if (type === 'food') {
-      updates.ingredients = document.getElementById('lib-ingredients').value.trim();
       updates.servingDescription = document.getElementById('lib-serving').value.trim();
       await DB.updateFoodItem(id, updates);
     } else {
@@ -1289,15 +1310,60 @@ const App = {
     try {
       const response = await fetch('version.json?t=' + Date.now());
       const remote = await response.json();
-      const local = '1.0.0'; // Current version
-      if (remote.version !== local) {
-        UI.showToast(`Update available: v${remote.version}. Refresh to update.`, 'warning');
+      if (remote.version !== this.APP_VERSION) {
+        this._showUpdateBanner(remote.version);
       } else {
         UI.showToast('App is up to date!', 'success');
       }
     } catch (e) {
       UI.showToast('Could not check for updates', 'error');
     }
+  },
+
+  /* Silent auto-check on launch (no error toast if offline) */
+  async _autoCheckForUpdates() {
+    try {
+      const response = await fetch('version.json?t=' + Date.now());
+      const remote = await response.json();
+      if (remote.version !== this.APP_VERSION) {
+        this._showUpdateBanner(remote.version);
+      }
+      // Also detect a waiting service worker
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg) {
+          // If a new SW is already waiting, show the banner
+          if (reg.waiting) this._showUpdateBanner(remote.version);
+          // Listen for future updates
+          reg.addEventListener('updatefound', () => {
+            const newSW = reg.installing;
+            if (newSW) {
+              newSW.addEventListener('statechange', () => {
+                if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+                  this._showUpdateBanner();
+                }
+              });
+            }
+          });
+        }
+      }
+    } catch (e) {
+      // Offline — silently skip
+    }
+  },
+
+  _showUpdateBanner(version) {
+    // Don't show multiple banners
+    if (document.getElementById('update-banner')) return;
+    const banner = document.createElement('div');
+    banner.id = 'update-banner';
+    banner.innerHTML = `
+      <div class="update-banner">
+        <span>🔄 Update available${version ? ' (v' + version + ')' : ''}</span>
+        <button onclick="location.reload(true)">Refresh Now</button>
+        <button class="dismiss" onclick="this.closest('.update-banner').remove()">✕</button>
+      </div>`;
+    document.body.prepend(banner);
   },
 
   /* ---------- Modal Helpers ---------- */
@@ -1419,7 +1485,7 @@ const App = {
   },
 
   _calcActivityStats(walks, steps) {
-    const todayWalk = walks.find(w => w.timestamp && w.timestamp.startsWith(UI.todayStr()));
+    const todayWalk = walks.find(w => w.timestamp && UI.localDateKey(w.timestamp) === UI.todayStr());
     const todaySteps = steps.find(s => s.date === UI.todayStr());
     const completedWalks = walks.filter(w => w.endTime);
     const avgWalkDuration = completedWalks.length > 0
@@ -1440,6 +1506,7 @@ const App = {
   async _calcFoodStats() {
     const totals = await DataSource.getDailyFoodTotals(UI.todayStr());
     return [
+      { label: 'Calories Today', value: Math.round(totals.calories || 0), unit: 'kcal' },
       { label: 'Protein Today', value: Math.round(totals.protein_g), unit: 'g' },
       { label: 'Carbs Today', value: Math.round(totals.carbs_g), unit: 'g' },
       { label: 'Fat Today', value: Math.round(totals.fat_g), unit: 'g' },

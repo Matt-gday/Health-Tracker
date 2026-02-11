@@ -46,8 +46,11 @@ const Demo = {
   getDailyDrinkTotal(dateStr) {
     if (!this.isActive) return 0;
     return this.getEvents('drink')
-      .filter(e => e.timestamp.startsWith(dateStr) ||
-        (e.timestamp >= dateStr + 'T00:00:00' && e.timestamp <= dateStr + 'T23:59:59'))
+      .filter(e => {
+        const d = new Date(e.timestamp);
+        const local = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        return local === dateStr;
+      })
       .reduce((sum, e) => sum + (e.volume_ml || 0), 0);
   },
 
@@ -232,32 +235,32 @@ const Demo = {
     // ============================================================
     const meals = [
       // Feb 5
-      { name: 'Bacon and Eggs', t: [2,5,7,30], p: 35, c: 1, f: 30, na: 800, desc: '4 rashers + 3 eggs' },
-      { name: 'Beef Burger Patties', t: [2,5,12,30], p: 40, c: 0, f: 30, na: 400, desc: '2 x 150g patties, no bun' },
-      { name: 'Ribeye Steak', t: [2,5,18,30], p: 65, c: 0, f: 45, na: 200, desc: '300g ribeye with butter' },
+      { name: 'Bacon and Eggs', t: [2,5,7,30], cal: 430, p: 35, c: 1, f: 30, na: 800, desc: '4 rashers + 3 eggs' },
+      { name: 'Beef Burger Patties', t: [2,5,12,30], cal: 440, p: 40, c: 0, f: 30, na: 400, desc: '2 x 150g patties, no bun' },
+      { name: 'Ribeye Steak', t: [2,5,18,30], cal: 680, p: 65, c: 0, f: 45, na: 200, desc: '300g ribeye with butter' },
       // Feb 6
-      { name: 'Cheese Omelette', t: [2,6,7,0], p: 28, c: 2, f: 25, na: 500, desc: '3 egg omelette with cheddar' },
-      { name: 'Roast Chicken Quarter', t: [2,6,12,0], p: 35, c: 0, f: 12, na: 250, desc: 'quarter chicken with skin' },
-      { name: 'Lamb Chops', t: [2,6,18,0], p: 45, c: 0, f: 35, na: 300, desc: '3 chops' },
+      { name: 'Cheese Omelette', t: [2,6,7,0], cal: 350, p: 28, c: 2, f: 25, na: 500, desc: '3 egg omelette with cheddar' },
+      { name: 'Roast Chicken Quarter', t: [2,6,12,0], cal: 260, p: 35, c: 0, f: 12, na: 250, desc: 'quarter chicken with skin' },
+      { name: 'Lamb Chops', t: [2,6,18,0], cal: 500, p: 45, c: 0, f: 35, na: 300, desc: '3 chops' },
       // Feb 7 (AFib day — episode 2pm-8pm)
-      { name: 'Steak and Eggs', t: [2,7,8,0], p: 50, c: 0, f: 22, na: 300, desc: '200g steak + 2 eggs' },
-      { name: 'Bone Broth', t: [2,7,13,0], p: 10, c: 0, f: 2, na: 600, desc: '1 large mug' },
-      { name: 'Roast Chicken Thighs', t: [2,7,19,30], p: 50, c: 0, f: 20, na: 400, desc: '4 thighs with skin', afib: true },
+      { name: 'Steak and Eggs', t: [2,7,8,0], cal: 410, p: 50, c: 0, f: 22, na: 300, desc: '200g steak + 2 eggs' },
+      { name: 'Bone Broth', t: [2,7,13,0], cal: 60, p: 10, c: 0, f: 2, na: 600, desc: '1 large mug' },
+      { name: 'Roast Chicken Thighs', t: [2,7,19,30], cal: 390, p: 50, c: 0, f: 20, na: 400, desc: '4 thighs with skin', afib: true },
       // Feb 8
-      { name: 'Bacon and Eggs', t: [2,8,8,30], p: 35, c: 1, f: 30, na: 800, desc: '4 rashers + 3 eggs' },
-      { name: 'Beef Burger Patties', t: [2,8,13,0], p: 40, c: 0, f: 30, na: 400, desc: '2 x 150g patties, no bun' },
-      { name: 'Pork Belly', t: [2,8,18,30], p: 30, c: 0, f: 55, na: 350, desc: '250g slow cooked' },
+      { name: 'Bacon and Eggs', t: [2,8,8,30], cal: 430, p: 35, c: 1, f: 30, na: 800, desc: '4 rashers + 3 eggs' },
+      { name: 'Beef Burger Patties', t: [2,8,13,0], cal: 440, p: 40, c: 0, f: 30, na: 400, desc: '2 x 150g patties, no bun' },
+      { name: 'Pork Belly', t: [2,8,18,30], cal: 620, p: 30, c: 0, f: 55, na: 350, desc: '250g slow cooked' },
       // Feb 9
-      { name: 'Steak and Eggs', t: [2,9,7,0], p: 50, c: 0, f: 22, na: 300, desc: '200g steak + 2 eggs' },
-      { name: 'Roast Chicken Quarter', t: [2,9,12,30], p: 35, c: 0, f: 12, na: 250, desc: 'quarter chicken with skin' },
-      { name: 'Ribeye Steak', t: [2,9,18,30], p: 65, c: 0, f: 45, na: 200, desc: '300g ribeye with butter' },
+      { name: 'Steak and Eggs', t: [2,9,7,0], cal: 410, p: 50, c: 0, f: 22, na: 300, desc: '200g steak + 2 eggs' },
+      { name: 'Roast Chicken Quarter', t: [2,9,12,30], cal: 260, p: 35, c: 0, f: 12, na: 250, desc: 'quarter chicken with skin' },
+      { name: 'Ribeye Steak', t: [2,9,18,30], cal: 680, p: 65, c: 0, f: 45, na: 200, desc: '300g ribeye with butter' },
       // Feb 10
-      { name: 'Cheese Omelette', t: [2,10,6,45], p: 28, c: 2, f: 25, na: 500, desc: '3 egg omelette with cheddar' },
-      { name: 'Beef Burger Patties', t: [2,10,12,0], p: 40, c: 0, f: 30, na: 400, desc: '2 x 150g patties, no bun' },
-      { name: 'Lamb Chops', t: [2,10,18,0], p: 45, c: 0, f: 35, na: 300, desc: '3 chops' },
+      { name: 'Cheese Omelette', t: [2,10,6,45], cal: 350, p: 28, c: 2, f: 25, na: 500, desc: '3 egg omelette with cheddar' },
+      { name: 'Beef Burger Patties', t: [2,10,12,0], cal: 440, p: 40, c: 0, f: 30, na: 400, desc: '2 x 150g patties, no bun' },
+      { name: 'Lamb Chops', t: [2,10,18,0], cal: 500, p: 45, c: 0, f: 35, na: 300, desc: '3 chops' },
       // Feb 11 (today — only breakfast and lunch so far)
-      { name: 'Bacon and Eggs', t: [2,11,7,30], p: 35, c: 1, f: 30, na: 800, desc: '4 rashers + 3 eggs' },
-      { name: 'Steak and Eggs', t: [2,11,12,0], p: 50, c: 0, f: 22, na: 300, desc: '200g steak + 2 eggs' },
+      { name: 'Bacon and Eggs', t: [2,11,7,30], cal: 430, p: 35, c: 1, f: 30, na: 800, desc: '4 rashers + 3 eggs' },
+      { name: 'Steak and Eggs', t: [2,11,12,0], cal: 410, p: 50, c: 0, f: 22, na: 300, desc: '200g steak + 2 eggs' },
     ];
 
     meals.forEach(m => {
@@ -265,7 +268,7 @@ const Demo = {
         id: nid(), eventType: 'food', timestamp: ts(...m.t),
         foodId: null, foodName: m.name, quantity: 1,
         servingDescription: m.desc,
-        protein_g: m.p, carbs_g: m.c, fat_g: m.f, sodium_mg: m.na,
+        calories: m.cal || 0, protein_g: m.p, carbs_g: m.c, fat_g: m.f, sodium_mg: m.na,
         notes: '', isDuringAFib: !!m.afib, lastEdited: null
       });
     });
@@ -332,6 +335,7 @@ const Demo = {
       e.push({
         id: nid(), eventType: 'drink', timestamp: ts(...d.t),
         drinkId: null, drinkName: d.n, volume_ml: d.v,
+        calories: isBroth ? 60 : (isCoffee ? 5 : 0),
         protein_g: isBroth ? 10 : 0, carbs_g: 0,
         fat_g: isBroth ? 2 : 0,
         sodium_mg: isBroth ? 600 : (isCoffee ? 5 : 0),
@@ -452,6 +456,7 @@ const DataSource = {
       const demoFood = Demo.getEvents('food').filter(e =>
         e.timestamp >= dateStr + 'T00:00:00' && e.timestamp <= dateStr + 'T23:59:59');
       return {
+        calories: demoFood.reduce((s, e) => s + (e.calories || 0), 0),
         protein_g: demoFood.reduce((s, e) => s + (e.protein_g || 0), 0),
         carbs_g: demoFood.reduce((s, e) => s + (e.carbs_g || 0), 0),
         fat_g: demoFood.reduce((s, e) => s + (e.fat_g || 0), 0),
