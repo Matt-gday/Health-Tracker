@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#00B3B7">
+  <title>Heart & Health Tracker</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="img/icon-192.png">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <!-- Toast Container (outside app-container for proper fixed positioning) -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <div id="app-container">
+    <!-- ===== PAGES ===== -->
+
+    <!-- Home Page -->
+    <div class="page active" id="page-home">
+      <div class="page-header with-safe-area">
+        <h1>Heart Tracker</h1>
+        <div class="header-action" style="display:flex;align-items:center;gap:8px;">
+          <button id="demo-toggle" onclick="Demo.toggle()" style="font-size:10px;padding:3px 8px;border-radius:10px;border:none;background:var(--bg-tertiary);color:var(--text-secondary);cursor:pointer;font-weight:600;letter-spacing:0.5px;">Demo</button>
+          <span style="font-size:13px;color:var(--text-tertiary)" id="home-date"></span>
+        </div>
+      </div>
+      <div class="page-content">
+        <div class="home-grid" id="home-grid">
+          <!-- Buttons rendered by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Dashboard Page -->
+    <div class="page" id="page-dashboard">
+      <div class="page-header with-safe-area">
+        <h1>Dashboard</h1>
+      </div>
+      <div class="page-content" id="dashboard-content">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+
+    <!-- History Page -->
+    <div class="page" id="page-history">
+      <div class="page-header with-safe-area">
+        <h1>History</h1>
+      </div>
+      <div class="page-content">
+        <div class="filter-chips" id="history-filters">
+          <!-- Rendered by JS -->
+        </div>
+        <div class="entry-list" id="history-list">
+          <!-- Rendered by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings Page -->
+    <div class="page" id="page-settings">
+      <div class="page-header with-safe-area">
+        <h1>Settings</h1>
+      </div>
+      <div class="page-content" id="settings-content">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+
+    <!-- Detail Pages (generic container, content rendered by JS) -->
+    <div class="page" id="page-detail">
+      <div class="page-header with-safe-area">
+        <button class="back-btn" onclick="App.goBack()">
+          <i data-lucide="chevron-left"></i> Back
+        </button>
+        <h1 id="detail-title"></h1>
+        <div class="header-action" id="detail-actions"></div>
+      </div>
+      <div class="page-content" id="detail-content">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+
+    <!-- ===== BOTTOM TAB BAR ===== -->
+    <nav id="tab-bar">
+      <button class="tab-btn active" data-tab="home" onclick="App.switchTab('home')">
+        <i data-lucide="home"></i>
+        <span>Home</span>
+      </button>
+      <button class="tab-btn" data-tab="dashboard" onclick="App.switchTab('dashboard')">
+        <i data-lucide="bar-chart-3"></i>
+        <span>Dashboard</span>
+      </button>
+      <button class="tab-btn" data-tab="history" onclick="App.switchTab('history')">
+        <i data-lucide="clock"></i>
+        <span>History</span>
+      </button>
+      <button class="tab-btn" data-tab="settings" onclick="App.switchTab('settings')">
+        <i data-lucide="settings"></i>
+        <span>Settings</span>
+      </button>
+    </nav>
+
+  </div>
+
+  <!-- ===== MODAL OVERLAY (outside app-container to avoid overflow:hidden issues) ===== -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal-sheet" id="modal-sheet">
+      <div class="modal-header">
+        <h2 id="modal-title"></h2>
+        <button class="modal-close-btn" onclick="App.closeModal()">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="modal-body" id="modal-body">
+        <!-- Dynamic content -->
+      </div>
+      <div class="modal-footer" id="modal-footer">
+        <!-- Dynamic buttons -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== FULLSCREEN MODAL ===== -->
+  <div class="modal-fullscreen" id="modal-fullscreen">
+    <div class="page-header">
+      <button class="back-btn" onclick="App.closeFullscreenModal()">
+        <i data-lucide="chevron-left"></i> Cancel
+      </button>
+      <h1 id="fullscreen-modal-title"></h1>
+      <button class="btn btn-ghost btn-sm" id="fullscreen-save-btn" onclick="App.saveFullscreenModal()">
+        Save
+      </button>
+    </div>
+    <div class="page-content" id="fullscreen-modal-body">
+      <!-- Dynamic content -->
+    </div>
+  </div>
+
+  <!-- External Libraries -->
+  <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+
+  <!-- App Scripts -->
+  <script src="js/db.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/demo.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/export.js"></script>
+  <script src="js/notifications.js"></script>
+
+  <!-- Service Worker Registration -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js')
+        .then(reg => console.log('SW registered:', reg.scope))
+        .catch(err => console.error('SW registration failed:', err));
+    }
+  </script>
+</body>
+</html>
