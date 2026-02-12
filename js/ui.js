@@ -198,7 +198,7 @@ const UI = {
       items.push({ icon: 'trending-up', label: 'Steps', value: s.steps.total.toLocaleString(), cls: '', filter: 'steps' });
     }
 
-    // Combined Nutrition (Food + Drink)
+    // Combined Nutrition (Food + Drink) — two-line display
     const hasFood = s.food.count > 0;
     const hasDrink = s.drink.totalMl > 0;
     if (hasFood || hasDrink) {
@@ -206,14 +206,22 @@ const UI = {
       const totalP = Math.round((s.food.protein || 0) + (s.drink.protein || 0));
       const totalC = Math.round((s.food.carbs || 0) + (s.drink.carbs || 0));
       const totalF = Math.round((s.food.fat || 0) + (s.drink.fat || 0));
-      let nutVal = totalCal > 0 ? `${totalCal} kcal` : '';
+      const totalCaffeine = Math.round(s.drink.caffeine || 0);
+      // Line 1: calories + macros
+      let line1 = totalCal > 0 ? `${totalCal} kcal` : '';
       const macros = [];
       if (totalP > 0) macros.push(`P:${totalP}g`);
       if (totalC > 0) macros.push(`C:${totalC}g`);
       if (totalF > 0) macros.push(`F:${totalF}g`);
-      if (macros.length > 0) nutVal += (nutVal ? ' · ' : '') + macros.join(' · ');
-      if (hasDrink) nutVal += (nutVal ? ' · ' : '') + `💧${s.drink.totalMl.toLocaleString()} mL`;
-      items.push({ icon: 'utensils', label: 'Nutrition', value: nutVal || 'Logged', cls: '', filter: 'nutrition', isDetail: true });
+      if (macros.length > 0) line1 += (line1 ? ' · ' : '') + macros.join(' · ');
+      // Line 2: fluid + caffeine
+      const line2Parts = [];
+      if (hasDrink) line2Parts.push(`💧 ${s.drink.totalMl.toLocaleString()} mL`);
+      if (totalCaffeine > 0) line2Parts.push(`☕ ${totalCaffeine} mg`);
+      const line2 = line2Parts.join('  ·  ');
+      const nutVal = line1 || 'Logged';
+      const nutSub = line2 || '';
+      items.push({ icon: 'utensils', label: 'Nutrition', value: nutVal, valueSub: nutSub, cls: '', filter: 'nutrition', isDetail: true });
     }
 
     // Medications
@@ -238,6 +246,7 @@ const UI = {
             <div class="summary-item-text">
               <span class="summary-label">${it.label}</span>
               <span class="summary-value">${it.value}</span>
+              ${it.valueSub ? `<span class="summary-value-sub">${it.valueSub}</span>` : ''}
             </div>
             <i data-lucide="chevron-right" class="summary-arrow"></i>
           </button>`).join('')}
