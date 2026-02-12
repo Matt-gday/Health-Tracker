@@ -169,9 +169,9 @@ const Demo = {
       exerciseContext: null, foodContext: null, isDuringAFib: false,
       notes: '', lastEdited: null });
     e.push({ id: nid(), eventType: 'bp_hr', timestamp: ts(2,9,18,30),
-      systolic: 128, diastolic: 80, heartRate: 65,
+      systolic: 118, diastolic: 76, heartRate: 64,
       exerciseContext: 'After Exercise', foodContext: null, isDuringAFib: false,
-      notes: 'Good reading after walk', lastEdited: null });
+      notes: 'Great reading after walk', lastEdited: null });
 
     // Feb 10 — AFib starts 11pm
     e.push({ id: nid(), eventType: 'bp_hr', timestamp: ts(2,10,6,15),

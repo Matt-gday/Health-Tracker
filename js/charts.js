@@ -219,6 +219,17 @@ const Charts = {
   },
 
   /* ---------- Detail Chart Configs ---------- */
+  /* Classify BP reading into color — matches UI.bpCategory */
+  _bpColor(sys, dia) {
+    const s = sys || 0, d = dia || 0;
+    if (s > 180 || d > 120) return '#991B1B'; // Crisis — dark red
+    if (s >= 140 || d >= 90) return '#DC2626'; // High — red
+    if (s >= 130 || d >= 80) return '#EC4899'; // Elevated — pink
+    if (s >= 120 && d < 80)  return '#EC4899'; // Elevated
+    if (s < 90 || d < 60)    return '#3B82F6'; // Low — blue
+    return '#10B981'; // Normal — green
+  },
+
   _buildBpChart(events) {
     const sorted = [...events].sort((a, b) => a.timestamp.localeCompare(b.timestamp)).slice(-30);
     const labels = sorted.map(e => UI.formatDate(e.timestamp));
@@ -227,21 +238,121 @@ const Charts = {
     const diaData = sorted.map(e => e.diastolic || null);
     const hrData = sorted.map(e => e.heartRate || null);
 
-    // Color AFib readings differently
-    const sysColors = sorted.map(e => e.isDuringAFib ? '#F59E0B' : '#EF4444');
-    const diaColors = sorted.map(e => e.isDuringAFib ? '#F59E0B' : '#00B3B7');
+    // Color each point by BP category (AFib readings keep the AFib amber ring)
+    const sysPointBg = sorted.map(e => this._bpColor(e.systolic, e.diastolic));
+    const diaPointBg = sorted.map(e => this._bpColor(e.systolic, e.diastolic));
+    const sysPointBorder = sorted.map(e => e.isDuringAFib ? '#F59E0B' : this._bpColor(e.systolic, e.diastolic));
+    const diaPointBorder = sorted.map(e => e.isDuringAFib ? '#F59E0B' : this._bpColor(e.systolic, e.diastolic));
+
+    // Custom plugin to draw BP zone backgrounds
+    const bpZonePlugin = {
+      id: 'bpZones',
+      beforeDraw(chart) {
+        const { ctx, chartArea: { left, right, top, bottom }, scales: { y } } = chart;
+        if (!y) return;
+        const zones = [
+          { min: 0,   max: 90,  color: 'rgba(59,130,246,0.06)' },   // Low zone
+          { min: 90,  max: 120, color: 'rgba(16,185,129,0.08)' },   // Normal zone
+          { min: 120, max: 130, color: 'rgba(236,72,153,0.06)' },   // Elevated zone
+          { min: 130, max: 140, color: 'rgba(236,72,153,0.10)' },   // High Stage 1
+          { min: 140, max: 200, color: 'rgba(220,38,38,0.08)' }     // High Stage 2+
+        ];
+        ctx.save();
+        zones.forEach(z => {
+          const yTop = y.getPixelForValue(Math.min(z.max, y.max));
+          const yBot = y.getPixelForValue(Math.max(z.min, y.min));
+          if (yBot > top && yTop < bottom) {
+            ctx.fillStyle = z.color;
+            ctx.fillRect(left, Math.max(yTop, top), right - left, Math.min(yBot, bottom) - Math.max(yTop, top));
+          }
+        });
+        // Draw threshold lines
+        const thresholds = [
+          { val: 90,  color: 'rgba(59,130,246,0.3)', dash: [4,4] },
+          { val: 120, color: 'rgba(16,185,129,0.4)', dash: [4,4] },
+          { val: 140, color: 'rgba(220,38,38,0.4)',  dash: [4,4] }
+        ];
+        thresholds.forEach(t => {
+          if (t.val >= y.min && t.val <= y.max) {
+            const py = y.getPixelForValue(t.val);
+            ctx.strokeStyle = t.color;
+            ctx.lineWidth = 1;
+            ctx.setLineDash(t.dash);
+            ctx.beginPath();
+            ctx.moveTo(left, py);
+            ctx.lineTo(right, py);
+            ctx.stroke();
+          }
+        });
+        ctx.restore();
+      }
+    };
 
     return {
       type: 'line',
       data: {
         labels,
         datasets: [
-          { label: 'Systolic', data: sysData, borderColor: '#EF4444', pointBackgroundColor: sysColors, tension: 0.3, pointRadius: 4, borderWidth: 2 },
-          { label: 'Diastolic', data: diaData, borderColor: '#00B3B7', pointBackgroundColor: diaColors, tension: 0.3, pointRadius: 4, borderWidth: 2 },
-          { label: 'Heart Rate', data: hrData, borderColor: '#F59E0B', tension: 0.3, pointRadius: 3, borderWidth: 1, borderDash: [5, 5] }
+          {
+            label: 'Systolic', data: sysData,
+            borderColor: 'rgba(150,150,150,0.3)',
+            pointBackgroundColor: sysPointBg,
+            pointBorderColor: sysPointBorder,
+            pointBorderWidth: sorted.map(e => e.isDuringAFib ? 3 : 1),
+            segment: {
+              borderColor: (ctx) => {
+                const i = ctx.p0DataIndex;
+                return sysPointBg[i] || '#999';
+              }
+            },
+            tension: 0.3, pointRadius: 5, borderWidth: 2
+          },
+          {
+            label: 'Diastolic', data: diaData,
+            borderColor: 'rgba(150,150,150,0.3)',
+            pointBackgroundColor: diaPointBg,
+            pointBorderColor: diaPointBorder,
+            pointBorderWidth: sorted.map(e => e.isDuringAFib ? 3 : 1),
+            segment: {
+              borderColor: (ctx) => {
+                const i = ctx.p0DataIndex;
+                return diaPointBg[i] || '#999';
+              }
+            },
+            tension: 0.3, pointRadius: 5, borderWidth: 2
+          },
+          {
+            label: 'Heart Rate', data: hrData,
+            borderColor: 'rgba(100,100,100,0.3)',
+            pointBackgroundColor: '#6B7280',
+            tension: 0.3, pointRadius: 3, borderWidth: 1, borderDash: [5, 5]
+          }
         ]
       },
-      options: this._defaultChartOptions()
+      options: {
+        ...this._defaultChartOptions(),
+        plugins: {
+          legend: {
+            display: true,
+            position: 'bottom',
+            labels: { boxWidth: 10, font: { size: 10 } }
+          },
+          tooltip: {
+            callbacks: {
+              afterLabel: (ctx) => {
+                if (ctx.datasetIndex > 1) return '';
+                const e = sorted[ctx.dataIndex];
+                if (!e) return '';
+                const cat = UI.bpCategory(e.systolic, e.diastolic);
+                let tip = cat.label ? `Status: ${cat.label}` : '';
+                if (e.isDuringAFib) tip += tip ? ' · During AFib' : 'During AFib';
+                return tip;
+              }
+            }
+          }
+        }
+      },
+      plugins: [bpZonePlugin]
     };
   },
 

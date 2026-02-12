@@ -1441,11 +1441,13 @@ const App = {
     const hrValues = events.filter(e => e.heartRate).map(e => e.heartRate);
 
     const avg = arr => arr.length ? Math.round(arr.reduce((a, b) => a + b) / arr.length) : '—';
+    const cat = UI.bpCategory(latest.systolic, latest.diastolic);
+    const avgCat = UI.bpCategory(avg(sysValues), avg(diaValues));
 
     return [
-      { label: 'Latest', value: `${latest.systolic || '—'}/${latest.diastolic || '—'}`, unit: 'mmHg' },
+      { label: 'Latest', value: `${latest.systolic || '—'}/${latest.diastolic || '—'}`, unit: 'mmHg', color: cat.color, bg: cat.bg, badge: cat.label },
       { label: 'Latest HR', value: latest.heartRate || '—', unit: 'BPM' },
-      { label: 'Avg BP', value: `${avg(sysValues)}/${avg(diaValues)}`, unit: 'mmHg' },
+      { label: 'Average', value: `${avg(sysValues)}/${avg(diaValues)}`, unit: 'mmHg', color: avgCat.color, bg: avgCat.bg, badge: avgCat.label },
       { label: 'Avg HR', value: avg(hrValues), unit: 'BPM' }
     ];
   },

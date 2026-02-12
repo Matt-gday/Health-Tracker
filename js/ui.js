@@ -40,6 +40,19 @@ const UI = {
     return `${m} min`;
   },
 
+  /* Classify a BP reading into a category with color */
+  bpCategory(sys, dia) {
+    if (!sys && !dia) return { label: '', color: '', bg: '' };
+    const s = sys || 0;
+    const d = dia || 0;
+    if (s > 180 || d > 120) return { label: 'Crisis',   color: '#991B1B', bg: '#FEE2E2' };
+    if (s >= 140 || d >= 90) return { label: 'High',     color: '#DC2626', bg: '#FEE2E2' };
+    if (s >= 130 || d >= 80) return { label: 'Elevated', color: '#EC4899', bg: '#FCE7F3' };
+    if (s >= 120 && d < 80)  return { label: 'Elevated', color: '#EC4899', bg: '#FCE7F3' };
+    if (s < 90 || d < 60)    return { label: 'Low',      color: '#3B82F6', bg: '#DBEAFE' };
+    return                           { label: 'Normal',   color: '#10B981', bg: '#D1FAE5' };
+  },
+
   todayStr() {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -151,9 +164,11 @@ const UI = {
       items.push({ icon: 'heart', label: 'AFib', value: `${s.afib.count} event${s.afib.count > 1 ? 's' : ''}`, cls: 'stat-afib', filter: 'afib' });
     }
 
-    // BP/HR - show latest reading
+    // BP/HR - show latest reading with category color
     if (s.bp.count > 0) {
-      items.push({ icon: 'activity', label: 'BP / HR', value: `${s.bp.lastSys}/${s.bp.lastDia} · ${s.bp.lastHr} bpm`, cls: '', filter: 'bp_hr' });
+      const bpCat = this.bpCategory(s.bp.lastSys, s.bp.lastDia);
+      const bpTag = bpCat.label ? ` <span style="color:${bpCat.color};font-weight:600;font-size:var(--font-xs)">${bpCat.label}</span>` : '';
+      items.push({ icon: 'activity', label: 'BP / HR', value: `${s.bp.lastSys}/${s.bp.lastDia} · ${s.bp.lastHr} bpm${bpTag}`, cls: '', filter: 'bp_hr' });
     }
 
     // Sleep
@@ -320,11 +335,12 @@ const UI = {
     const afibFlag = event.isDuringAFib ? '<span class="afib-flag">AFib</span>' : '';
     const editedBadge = event.lastEdited ? '<span class="edited-badge">edited</span>' : '';
     const skippedClass = (event.eventType === 'medication' && event.status === 'Skipped') ? ' entry-skipped' : '';
+    const bpBadge = config.bpBadge || '';
     return `
       <div class="entry-item${skippedClass}" onclick="App.editEntry('${event.id}')">
         <div class="entry-icon ${config.iconClass}"><i data-lucide="${config.icon}"></i></div>
         <div class="entry-body">
-          <div class="entry-title">${config.title} ${afibFlag}</div>
+          <div class="entry-title">${config.title} ${afibFlag}${bpBadge}</div>
           <div class="entry-subtitle">${config.subtitle}</div>
         </div>
         <div class="entry-meta">
@@ -342,15 +358,18 @@ const UI = {
           title: event.endTime ? 'AFib Episode' : 'AFib Started',
           subtitle: event.endTime ? `Duration: ${this.formatDuration(event.duration_min)}` : 'In progress...'
         };
-      case 'bp_hr':
-        const parts = [];
-        if (event.systolic || event.diastolic) parts.push(`${event.systolic || '—'}/${event.diastolic || '—'} mmHg`);
-        if (event.heartRate) parts.push(`${event.heartRate} BPM`);
+      case 'bp_hr': {
+        const bpParts = [];
+        if (event.systolic || event.diastolic) bpParts.push(`${event.systolic || '—'}/${event.diastolic || '—'} mmHg`);
+        if (event.heartRate) bpParts.push(`${event.heartRate} BPM`);
+        const cat = this.bpCategory(event.systolic, event.diastolic);
         return {
           icon: 'activity', iconClass: 'bp',
           title: 'Blood Pressure / HR',
-          subtitle: parts.join('  ·  ') || 'No values recorded'
+          subtitle: bpParts.join('  ·  ') || 'No values recorded',
+          bpBadge: cat.label ? `<span class="bp-badge" style="background:${cat.bg};color:${cat.color}">${cat.label}</span>` : ''
         };
+      }
       case 'sleep':
         return {
           icon: 'moon', iconClass: 'sleep',
@@ -896,9 +915,22 @@ const UI = {
     if (stats && stats.length > 0) {
       html += '<div class="stats-grid">';
       stats.forEach(s => {
-        html += `<div class="stat-card"><div class="stat-label">${s.label}</div><div class="stat-value">${s.value} <span class="stat-unit">${s.unit || ''}</span></div></div>`;
+        const colorStyle = s.color ? ` style="color:${s.color}"` : '';
+        const badge = s.badge ? `<span class="bp-badge" style="background:${s.bg || 'transparent'};color:${s.color};font-size:var(--font-xs);margin-left:4px">${s.badge}</span>` : '';
+        html += `<div class="stat-card"><div class="stat-label">${s.label}</div><div class="stat-value"${colorStyle}>${s.value} <span class="stat-unit">${s.unit || ''}</span>${badge}</div></div>`;
       });
       html += '</div>';
+    }
+
+    // BP zone legend (only for BP detail)
+    if (type === 'bp_hr') {
+      html += `<div class="bp-legend">
+        <span class="bp-legend-item"><span class="bp-dot" style="background:#3B82F6"></span>Low</span>
+        <span class="bp-legend-item"><span class="bp-dot" style="background:#10B981"></span>Normal</span>
+        <span class="bp-legend-item"><span class="bp-dot" style="background:#EC4899"></span>Elevated</span>
+        <span class="bp-legend-item"><span class="bp-dot" style="background:#DC2626"></span>High</span>
+        <span class="bp-legend-item"><span class="bp-dot" style="background:#991B1B"></span>Crisis</span>
+      </div>`;
     }
 
     // Chart placeholder
