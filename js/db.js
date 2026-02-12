@@ -448,6 +448,10 @@ const DB = {
       drink: {
         totalMl: drinkEvents.reduce((s, e) => s + (e.volume_ml || 0), 0),
         calories: drinkEvents.reduce((s, e) => s + (e.calories || 0), 0),
+        protein: drinkEvents.reduce((s, e) => s + (e.protein_g || 0), 0),
+        carbs: drinkEvents.reduce((s, e) => s + (e.carbs_g || 0), 0),
+        fat: drinkEvents.reduce((s, e) => s + (e.fat_g || 0), 0),
+        sodium: drinkEvents.reduce((s, e) => s + (e.sodium_mg || 0), 0),
         caffeine: drinkEvents.reduce((s, e) => s + (e.caffeine_mg || 0), 0),
         count: drinkEvents.length
       },

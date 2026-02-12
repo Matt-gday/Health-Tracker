@@ -113,6 +113,9 @@ const Charts = {
       case 'drink':
         config = this._buildDrinkChart(events);
         break;
+      case 'nutrition':
+        config = this._buildNutritionChart(events);
+        break;
       case 'medication':
         config = this._buildMedChart(events);
         break;
@@ -530,6 +533,52 @@ const Charts = {
         }]
       },
       options: this._defaultChartOptions()
+    };
+  },
+
+  _buildNutritionChart(events) {
+    // Combined food + drink macros per day for last 7 days
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      days.push(this._localDayStr(i));
+    }
+    const byDay = {};
+    events.forEach(e => {
+      const dk = this._localDateKey(e.timestamp);
+      if (!byDay[dk]) byDay[dk] = [];
+      byDay[dk].push(e);
+    });
+    const dailyData = days.map(day => {
+      const dayEvents = byDay[day] || [];
+      return {
+        calories: dayEvents.reduce((s, e) => s + (e.calories || 0), 0),
+        protein: dayEvents.reduce((s, e) => s + (e.protein_g || 0), 0),
+        carbs: dayEvents.reduce((s, e) => s + (e.carbs_g || 0), 0),
+        fat: dayEvents.reduce((s, e) => s + (e.fat_g || 0), 0),
+        fluid: dayEvents.filter(e => e.eventType === 'drink').reduce((s, e) => s + (e.volume_ml || 0), 0)
+      };
+    });
+
+    return {
+      type: 'bar',
+      data: {
+        labels: days.map(d => { const dt = new Date(d + 'T12:00:00'); return `${dt.getDate()}/${dt.getMonth() + 1}`; }),
+        datasets: [
+          { label: 'Calories', data: dailyData.map(d => Math.round(d.calories)), type: 'line', borderColor: '#EF4444', backgroundColor: 'rgba(239,68,68,0.1)', tension: 0.3, pointRadius: 3, borderWidth: 2, yAxisID: 'y1', fill: false },
+          { label: 'Protein (g)', data: dailyData.map(d => Math.round(d.protein)), backgroundColor: 'rgba(16,185,129,0.6)', borderRadius: 3, yAxisID: 'y' },
+          { label: 'Carbs (g)', data: dailyData.map(d => Math.round(d.carbs)), backgroundColor: 'rgba(59,130,246,0.6)', borderRadius: 3, yAxisID: 'y' },
+          { label: 'Fat (g)', data: dailyData.map(d => Math.round(d.fat)), backgroundColor: 'rgba(245,158,11,0.6)', borderRadius: 3, yAxisID: 'y' }
+        ]
+      },
+      options: {
+        ...this._defaultChartOptions(),
+        scales: {
+          x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 0 } },
+          y: { position: 'left', grid: { color: '#F3F4F6' }, title: { display: true, text: 'Macros (g)', font: { size: 10 } } },
+          y1: { position: 'right', grid: { display: false }, title: { display: true, text: 'Calories', font: { size: 10 } } }
+        },
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } }
+      }
     };
   },
 

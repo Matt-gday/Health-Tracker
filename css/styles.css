@@ -250,8 +250,8 @@ a {
 .home-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-md);
-  padding: var(--space-md);
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
 }
 
 .action-btn {
@@ -259,15 +259,15 @@ a {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-sm);
+  gap: 4px;
   background: var(--bg-card);
   border: none;
   border-radius: var(--radius-lg);
-  padding: var(--space-lg) var(--space-sm);
+  padding: var(--space-md) var(--space-sm);
   cursor: pointer;
   transition: all 0.2s ease;
   box-shadow: var(--shadow-md);
-  min-height: 110px;
+  min-height: 72px;
   position: relative;
 }
 
@@ -278,8 +278,8 @@ a {
 }
 
 .action-btn svg {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   color: var(--accent-blue-dark);
   transition: color 0.2s;
 }
@@ -293,9 +293,7 @@ a {
 }
 
 .action-btn .btn-sublabel {
-  font-size: var(--font-xs);
-  color: var(--text-tertiary);
-  text-align: center;
+  display: none;
 }
 
 /* Toggle button active states */
@@ -364,13 +362,13 @@ a {
   color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 1px;
-  margin-bottom: var(--space-sm);
+  margin-bottom: 4px;
 }
 
 .summary-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  grid-template-columns: 1fr;
+  gap: 6px;
 }
 
 .summary-item {
@@ -413,16 +411,20 @@ a {
 
 .summary-item-text {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 6px;
   min-width: 0;
+  flex: 1;
 }
 
 .summary-label {
-  font-size: 10px;
+  font-size: var(--font-sm);
   font-weight: 600;
   color: var(--text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0;
+  white-space: nowrap;
+  flex-shrink: 0;
   line-height: 1.2;
 }
 
@@ -431,6 +433,8 @@ a {
   font-weight: 600;
   color: var(--text-primary);
   line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1626,7 +1630,7 @@ textarea.form-input {
   }
 
   .action-btn {
-    padding: var(--space-md) var(--space-sm);
-    min-height: 96px;
+    padding: var(--space-sm) var(--space-xs);
+    min-height: 64px;
   }
 }

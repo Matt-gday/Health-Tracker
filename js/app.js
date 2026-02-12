@@ -168,6 +168,13 @@ const App = {
         events = await DataSource.getAllEvents('drink', 100);
         stats = await this._calcDrinkStats();
         break;
+      case 'nutrition': {
+        const foodEvents = await DataSource.getAllEvents('food', 100);
+        const drinkEvents = await DataSource.getAllEvents('drink', 100);
+        events = [...foodEvents, ...drinkEvents].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+        stats = await this._calcNutritionStats();
+        break;
+      }
       case 'medication':
         const meds = await DataSource.getAllEvents('medication', 100);
         const vent = await DataSource.getAllEvents('ventolin', 100);
@@ -198,6 +205,7 @@ const App = {
       case 'weight': this.openWeightEntry(); break;
       case 'food': this.openFoodEntry(); break;
       case 'drink': this.openDrinkEntry(); break;
+      case 'nutrition': this.openNutritionAddPicker(); break;
       case 'medication': this.openRetrospectiveMedEntry(); break;
       case 'activity': this.openManualActivityEntry(); break;
       case 'afib': this.openManualAfibEntry(); break;
@@ -246,6 +254,20 @@ const App = {
       </div>`;
     const footer = `<button class="btn btn-primary" onclick="App.saveManualToggleEntry('sleep')">Save</button>`;
     UI.openModal('Log Sleep', body, footer);
+  },
+
+  openNutritionAddPicker() {
+    const body = `
+      <p style="font-size:var(--font-sm);color:var(--text-secondary);margin-bottom:var(--space-md)">What would you like to log?</p>
+      <div style="display:flex;flex-direction:column;gap:var(--space-sm)">
+        <button class="btn btn-secondary" onclick="UI.closeModal();App.openFoodEntry()">
+          <i data-lucide="utensils"></i> Food
+        </button>
+        <button class="btn btn-secondary" onclick="UI.closeModal();App.openDrinkEntry()">
+          <i data-lucide="droplets"></i> Drink
+        </button>
+      </div>`;
+    UI.openModal('Add Nutrition Entry', body, '');
   },
 
   openManualActivityEntry() {
@@ -1716,6 +1738,28 @@ const App = {
       { label: "Today's Steps", value: todaySteps ? todaySteps.steps.toLocaleString() : 'None' },
       { label: 'Avg Walk', value: UI.formatDuration(avgWalkDuration) },
       { label: 'Avg Steps', value: avgSteps.toLocaleString() }
+    ];
+  },
+
+  async _calcNutritionStats() {
+    const today = UI.todayStr();
+    const summary = await DataSource.getDailySummary(today);
+    const f = summary.food;
+    const d = summary.drink;
+
+    const totalCal = Math.round((f.calories || 0) + (d.calories || 0));
+    const totalP = Math.round((f.protein || 0) + (d.protein || 0));
+    const totalC = Math.round((f.carbs || 0) + (d.carbs || 0));
+    const totalF = Math.round((f.fat || 0) + (d.fat || 0));
+    const totalSodium = Math.round((f.sodium || 0) + (d.sodium || 0));
+
+    return [
+      { label: 'Calories Today', value: totalCal, unit: 'kcal' },
+      { label: 'Protein', value: totalP, unit: 'g' },
+      { label: 'Carbs', value: totalC, unit: 'g' },
+      { label: 'Fat', value: totalF, unit: 'g' },
+      { label: 'Sodium', value: totalSodium, unit: 'mg' },
+      { label: 'Fluid', value: (d.totalMl || 0).toLocaleString(), unit: 'mL' }
     ];
   },
 

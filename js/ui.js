@@ -128,7 +128,6 @@ const UI = {
         <button class="action-btn${activeClass}" id="btn-${btn.id}" onclick="App.handleAction('${btn.id}')">
           <i data-lucide="${btn.icon}"></i>
           <span class="btn-label">${btn.toggleType && toggleStates[btn.toggleType] ? btn.label + ' Stop' : btn.label}</span>
-          <span class="btn-sublabel">${btn.sublabel}</span>
         </button>`;
     }).join('');
 
@@ -199,19 +198,22 @@ const UI = {
       items.push({ icon: 'trending-up', label: 'Steps', value: s.steps.total.toLocaleString(), cls: '', filter: 'steps' });
     }
 
-    // Food
-    if (s.food.count > 0) {
-      let foodVal = s.food.calories > 0 ? `${Math.round(s.food.calories)} kcal · ` : '';
-      foodVal += `P:${Math.round(s.food.protein)}g · F:${Math.round(s.food.fat)}g · C:${Math.round(s.food.carbs)}g`;
-      items.push({ icon: 'utensils', label: 'Food', value: foodVal, cls: '', filter: 'food' });
-    }
-
-    // Drink
-    if (s.drink.totalMl > 0) {
-      let val = `${s.drink.totalMl.toLocaleString()} mL`;
-      if (s.drink.calories > 0) val += ` · ${Math.round(s.drink.calories)} kcal`;
-      if (s.drink.caffeine > 0) val += ` · ☕ ${Math.round(s.drink.caffeine)}mg`;
-      items.push({ icon: 'droplets', label: 'Drink', value: val, cls: '', filter: 'drink' });
+    // Combined Nutrition (Food + Drink)
+    const hasFood = s.food.count > 0;
+    const hasDrink = s.drink.totalMl > 0;
+    if (hasFood || hasDrink) {
+      const totalCal = Math.round((s.food.calories || 0) + (s.drink.calories || 0));
+      const totalP = Math.round((s.food.protein || 0) + (s.drink.protein || 0));
+      const totalC = Math.round((s.food.carbs || 0) + (s.drink.carbs || 0));
+      const totalF = Math.round((s.food.fat || 0) + (s.drink.fat || 0));
+      let nutVal = totalCal > 0 ? `${totalCal} kcal` : '';
+      const macros = [];
+      if (totalP > 0) macros.push(`P:${totalP}g`);
+      if (totalC > 0) macros.push(`C:${totalC}g`);
+      if (totalF > 0) macros.push(`F:${totalF}g`);
+      if (macros.length > 0) nutVal += (nutVal ? ' · ' : '') + macros.join(' · ');
+      if (hasDrink) nutVal += (nutVal ? ' · ' : '') + `💧${s.drink.totalMl.toLocaleString()} mL`;
+      items.push({ icon: 'utensils', label: 'Nutrition', value: nutVal || 'Logged', cls: '', filter: 'nutrition', isDetail: true });
     }
 
     // Medications
@@ -231,7 +233,7 @@ const UI = {
       <h3 class="summary-title">Today's Summary</h3>
       <div class="summary-grid">
         ${items.map(it => `
-          <button class="summary-item ${it.cls}" onclick="App.openHistoryFiltered('${it.filter}')">
+          <button class="summary-item ${it.cls}" onclick="${it.isDetail ? `App.openDetail('${it.filter}')` : `App.openHistoryFiltered('${it.filter}')`}">
             <i data-lucide="${it.icon}"></i>
             <div class="summary-item-text">
               <span class="summary-label">${it.label}</span>
@@ -934,7 +936,7 @@ const UI = {
     const titles = {
       afib: 'AFib', bp_hr: 'Blood Pressure / HR', sleep: 'Sleep',
       weight: 'Weight', activity: 'Activity', food: 'Food',
-      drink: 'Drinks', medication: 'Medication'
+      drink: 'Drinks', nutrition: 'Nutrition', medication: 'Medication'
     };
     titleEl.textContent = titles[type] || type;
 
