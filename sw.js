@@ -3,7 +3,7 @@
    Offline-first caching strategy
    ============================================ */
 
-const CACHE_NAME = 'heart-tracker-v1.6.3';
+const CACHE_NAME = 'heart-tracker-v1.6.4';
 const ASSETS = [
   './',
   './index.html',
@@ -24,8 +24,9 @@ const ASSETS = [
   'https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js'
 ];
 
-// Install: Pre-cache all assets
+// Install: Pre-cache all assets — skip waiting so new SW activates immediately
 self.addEventListener('install', (event) => {
+  console.log('SW: Installing', CACHE_NAME);
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
@@ -36,16 +37,27 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Activate: Clean up old caches
+// Activate: Clean up ALL old caches, then claim all clients immediately
 self.addEventListener('activate', (event) => {
+  console.log('SW: Activating', CACHE_NAME);
   event.waitUntil(
     caches.keys().then(keys => {
       return Promise.all(
         keys.filter(key => key !== CACHE_NAME)
-            .map(key => caches.delete(key))
+            .map(key => {
+              console.log('SW: Deleting old cache', key);
+              return caches.delete(key);
+            })
       );
     }).then(() => self.clients.claim())
   );
+});
+
+// Listen for skip-waiting message from the app
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // Fetch: Cache-first for known assets, network-first for dynamic

@@ -1544,12 +1544,25 @@ const App = {
   /* ---------- Version Check ---------- */
   async checkForUpdates() {
     try {
+      // Force SW update check
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg) await reg.update();
+      }
       const response = await fetch('version.json?t=' + Date.now());
       const remote = await response.json();
       if (remote.version !== this.APP_VERSION) {
         this._showUpdateBanner(remote.version);
       } else {
-        UI.showToast('App is up to date!', 'success');
+        // Double-check: is there a waiting SW even though versions match?
+        if ('serviceWorker' in navigator) {
+          const reg = await navigator.serviceWorker.getRegistration();
+          if (reg && reg.waiting) {
+            this._showUpdateBanner();
+            return;
+          }
+        }
+        UI.showToast('App is up to date! (v' + this.APP_VERSION + ')', 'success');
       }
     } catch (e) {
       UI.showToast('Could not check for updates', 'error');
@@ -1559,18 +1572,18 @@ const App = {
   /* Silent auto-check on launch (no error toast if offline) */
   async _autoCheckForUpdates() {
     try {
-      const response = await fetch('version.json?t=' + Date.now());
-      const remote = await response.json();
-      if (remote.version !== this.APP_VERSION) {
-        this._showUpdateBanner(remote.version);
-      }
-      // Also detect a waiting service worker
+      // Force the SW to check for updates
       if ('serviceWorker' in navigator) {
         const reg = await navigator.serviceWorker.getRegistration();
         if (reg) {
+          reg.update().catch(() => {});
+
           // If a new SW is already waiting, show the banner
-          if (reg.waiting) this._showUpdateBanner(remote.version);
-          // Listen for future updates
+          if (reg.waiting) {
+            this._showUpdateBanner();
+            return;
+          }
+          // Listen for future updates found during this session
           reg.addEventListener('updatefound', () => {
             const newSW = reg.installing;
             if (newSW) {
@@ -1582,6 +1595,13 @@ const App = {
             }
           });
         }
+      }
+
+      // Also check version.json directly (catches cases where SW hasn't updated yet)
+      const response = await fetch('version.json?t=' + Date.now());
+      const remote = await response.json();
+      if (remote.version !== this.APP_VERSION) {
+        this._showUpdateBanner(remote.version);
       }
     } catch (e) {
       // Offline — silently skip
@@ -1596,10 +1616,31 @@ const App = {
     banner.innerHTML = `
       <div class="update-banner">
         <span>🔄 Update available${version ? ' (v' + version + ')' : ''}</span>
-        <button onclick="location.reload(true)">Refresh Now</button>
-        <button class="dismiss" onclick="this.closest('.update-banner').remove()">✕</button>
+        <button onclick="App.applyUpdate()">Update Now</button>
+        <button class="dismiss" onclick="this.closest('#update-banner').remove()">✕</button>
       </div>`;
     document.body.prepend(banner);
+  },
+
+  async applyUpdate() {
+    try {
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg) {
+          // If a new SW is waiting, tell it to activate
+          if (reg.waiting) {
+            reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+          }
+          // Clear all caches to force fresh downloads
+          const keys = await caches.keys();
+          await Promise.all(keys.map(k => caches.delete(k)));
+        }
+      }
+    } catch (e) {
+      console.log('Update cleanup error:', e);
+    }
+    // Hard reload — bypasses cache
+    window.location.reload(true);
   },
 
   /* ---------- Modal Helpers ---------- */
