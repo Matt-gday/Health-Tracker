@@ -689,6 +689,35 @@ const UI = {
       </div>`;
   },
 
+  /* ---------- Retrospective Medication Form ---------- */
+  buildRetrospectiveMedForm(medications, defaultTimestamp) {
+    const listHtml = medications.map((med, i) => {
+      const schedule = med.schedule || '';
+      const scheduleTag = schedule ? `<span class="retro-med-schedule">${schedule}</span>` : '';
+      return `
+        <div class="med-item">
+          <div class="retro-med-checkbox" id="retro-med-${i}" data-med-id="${med.id}" data-status="" onclick="App.toggleRetroMedCheck(${i})">
+          </div>
+          <div class="med-info">
+            <div class="med-name">${med.name} ${scheduleTag}</div>
+            <div class="med-dose">${med.dosage || ''}</div>
+          </div>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="form-group">
+        <label>Date & Time</label>
+        <input type="datetime-local" class="form-input" id="retro-med-timestamp" value="${defaultTimestamp}">
+      </div>
+      <p style="font-size:var(--font-sm);color:var(--text-secondary);margin-bottom:var(--space-sm);">
+        Tap once = <strong style="color:var(--accent-success)">Taken</strong> · 
+        Tap again = <strong style="color:var(--accent-danger)">Skipped</strong> · 
+        Tap again = unselected
+      </p>
+      <div class="med-list">${listHtml}</div>`;
+  },
+
   /* ---------- Edit Entry Form (generic) ---------- */
   buildEditForm(event) {
     switch (event.eventType) {
@@ -965,6 +994,11 @@ const UI = {
     } else {
       html += '<div class="empty-state"><i data-lucide="inbox"></i><p>No data yet.</p></div>';
     }
+
+    // Floating "Add" button
+    html += `<button class="detail-fab" onclick="App.addFromDetail()" aria-label="Add entry">
+      <i data-lucide="plus"></i>
+    </button>`;
 
     content.innerHTML = html;
     lucide.createIcons();

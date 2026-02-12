@@ -621,6 +621,33 @@ a {
   line-height: 1;
 }
 
+/* Detail page floating add button */
+.detail-fab {
+  position: fixed;
+  bottom: calc(var(--space-lg) + env(safe-area-inset-bottom, 0px));
+  right: var(--space-lg);
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--accent-blue);
+  color: var(--text-inverse);
+  border: none;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 100;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.detail-fab:active {
+  transform: scale(0.92);
+}
+.detail-fab svg {
+  width: 24px;
+  height: 24px;
+}
+
 /* BP zone legend on detail page */
 .bp-legend {
   display: flex;
@@ -1182,6 +1209,43 @@ textarea.form-input {
 .med-checkbox svg {
   width: 16px;
   height: 16px;
+}
+
+/* Retrospective medication checkboxes (3-state: empty → taken → skipped) */
+.retro-med-checkbox {
+  width: 24px;
+  height: 24px;
+  background: var(--bg-muted);
+  border: none;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.retro-med-checkbox.checked {
+  background: var(--accent-success);
+  color: white;
+}
+.retro-med-checkbox.checked.skipped {
+  background: var(--accent-danger);
+  color: white;
+}
+.retro-med-checkbox svg {
+  width: 16px;
+  height: 16px;
+}
+.retro-med-schedule {
+  display: inline-block;
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
+  background: var(--bg-tertiary);
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: 4px;
+  font-weight: 500;
 }
 
 .med-info {

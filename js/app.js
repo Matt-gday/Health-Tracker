@@ -65,6 +65,11 @@ const App = {
   },
 
   async renderCurrentTab() {
+    // If we're on a detail page, refresh it
+    if (this._currentDetailType && document.getElementById('page-detail').classList.contains('active')) {
+      await this.openDetail(this._currentDetailType, true);
+      return;
+    }
     switch (this.currentTab) {
       case 'home':
         const dailySummary = await this._getDailySummary();
@@ -120,8 +125,13 @@ const App = {
   },
 
   /* ---------- Detail Pages ---------- */
-  async openDetail(type) {
-    this.previousPages.push(this.currentTab);
+  _currentDetailType: null,
+
+  async openDetail(type, _isRefresh = false) {
+    this._currentDetailType = type;
+    if (!_isRefresh) {
+      this.previousPages.push(this.currentTab);
+    }
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.getElementById('page-detail').classList.add('active');
     document.getElementById('tab-bar').style.display = 'none';
@@ -174,9 +184,213 @@ const App = {
   },
 
   goBack() {
+    this._currentDetailType = null;
     document.getElementById('tab-bar').style.display = 'flex';
     const prev = this.previousPages.pop() || 'home';
     this.switchTab(prev);
+  },
+
+  /* ---------- Add from Detail Page ---------- */
+  addFromDetail() {
+    const type = this._currentDetailType;
+    switch (type) {
+      case 'bp_hr': this.openBpEntry(); break;
+      case 'weight': this.openWeightEntry(); break;
+      case 'food': this.openFoodEntry(); break;
+      case 'drink': this.openDrinkEntry(); break;
+      case 'medication': this.openRetrospectiveMedEntry(); break;
+      case 'activity': this.openManualActivityEntry(); break;
+      case 'afib': this.openManualAfibEntry(); break;
+      case 'sleep': this.openManualSleepEntry(); break;
+      default:
+        UI.showToast('Add not available for this type', 'info');
+    }
+  },
+
+  /* Manual entry for toggle-based types from detail view */
+  openManualAfibEntry() {
+    this._editingEventId = null;
+    const now = UI.localISOString(new Date());
+    const body = `
+      <div class="form-group">
+        <label>AFib Episode — Start Time</label>
+        <input type="datetime-local" class="form-input" id="toggle-start" value="${now}">
+      </div>
+      <div class="form-group">
+        <label>End Time</label>
+        <input type="datetime-local" class="form-input" id="toggle-end" value="">
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea class="form-input" id="toggle-notes" placeholder="Optional notes..."></textarea>
+      </div>`;
+    const footer = `<button class="btn btn-primary" onclick="App.saveManualToggleEntry('afib')">Save</button>`;
+    UI.openModal('Log AFib Episode', body, footer);
+  },
+
+  openManualSleepEntry() {
+    this._editingEventId = null;
+    const now = UI.localISOString(new Date());
+    const body = `
+      <div class="form-group">
+        <label>Sleep — Start Time</label>
+        <input type="datetime-local" class="form-input" id="toggle-start" value="${now}">
+      </div>
+      <div class="form-group">
+        <label>End Time</label>
+        <input type="datetime-local" class="form-input" id="toggle-end" value="">
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea class="form-input" id="toggle-notes" placeholder="Optional notes..."></textarea>
+      </div>`;
+    const footer = `<button class="btn btn-primary" onclick="App.saveManualToggleEntry('sleep')">Save</button>`;
+    UI.openModal('Log Sleep', body, footer);
+  },
+
+  openManualActivityEntry() {
+    this._editingEventId = null;
+    const body = `
+      <p style="font-size:var(--font-sm);color:var(--text-secondary);margin-bottom:var(--space-md)">Choose what to log:</p>
+      <div style="display:flex;flex-direction:column;gap:var(--space-sm)">
+        <button class="btn btn-secondary" onclick="UI.closeModal();App.openManualWalkEntry()">
+          <i data-lucide="footprints"></i> Walk
+        </button>
+        <button class="btn btn-secondary" onclick="UI.closeModal();App.openStepsEntry()">
+          <i data-lucide="trending-up"></i> Steps
+        </button>
+      </div>`;
+    UI.openModal('Add Activity', body, '');
+  },
+
+  openManualWalkEntry() {
+    this._editingEventId = null;
+    const now = UI.localISOString(new Date());
+    const body = `
+      <div class="form-group">
+        <label>Walk — Start Time</label>
+        <input type="datetime-local" class="form-input" id="toggle-start" value="${now}">
+      </div>
+      <div class="form-group">
+        <label>End Time</label>
+        <input type="datetime-local" class="form-input" id="toggle-end" value="">
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea class="form-input" id="toggle-notes" placeholder="Optional notes..."></textarea>
+      </div>`;
+    const footer = `<button class="btn btn-primary" onclick="App.saveManualToggleEntry('walk')">Save</button>`;
+    UI.openModal('Log Walk', body, footer);
+  },
+
+  async saveManualToggleEntry(eventType) {
+    const startVal = document.getElementById('toggle-start').value;
+    const endVal = document.getElementById('toggle-end').value;
+    if (!startVal) {
+      UI.showToast('Start time is required', 'error');
+      return;
+    }
+    const startTime = new Date(startVal).toISOString();
+    const endTime = endVal ? new Date(endVal).toISOString() : null;
+    let duration_min = null;
+    if (startTime && endTime) {
+      duration_min = Math.round((new Date(endTime) - new Date(startTime)) / 60000);
+      if (duration_min < 0) {
+        UI.showToast('End time must be after start time', 'error');
+        return;
+      }
+    }
+    const data = {
+      eventType,
+      startTime,
+      endTime,
+      timestamp: startTime,
+      duration_min,
+      notes: document.getElementById('toggle-notes').value.trim()
+    };
+    if (eventType === 'afib') data.isDuringAFib = true;
+    await DB.addEvent(data);
+    UI.closeModal();
+    UI.showToast(`${eventType === 'afib' ? 'AFib episode' : eventType.charAt(0).toUpperCase() + eventType.slice(1)} logged`, 'success');
+    await this.openDetail(this._currentDetailType, true);
+  },
+
+  /* Retrospective medication entry — all meds, custom date/time */
+  async openRetrospectiveMedEntry() {
+    const allMeds = await DB.getMedications();
+    if (!allMeds || allMeds.length === 0) {
+      UI.showToast('No medications configured. Add them in Settings.', 'info');
+      return;
+    }
+    const now = UI.localISOString(new Date());
+    const body = UI.buildRetrospectiveMedForm(allMeds, now);
+    const footer = `<button class="btn btn-primary" onclick="App.saveRetrospectiveMedEntry()">Save Selected</button>`;
+    UI.openModal('Log Medications', body, footer);
+    this.setupToggleGroupListeners();
+  },
+
+  async saveRetrospectiveMedEntry() {
+    const timestampVal = document.getElementById('retro-med-timestamp').value;
+    if (!timestampVal) {
+      UI.showToast('Date & time is required', 'error');
+      return;
+    }
+    const timestamp = new Date(timestampVal).toISOString();
+    const hour = new Date(timestampVal).getHours();
+    const timeOfDay = hour < 12 ? 'AM' : 'PM';
+
+    const checkboxes = document.querySelectorAll('.retro-med-checkbox');
+    let count = 0;
+    for (const cb of checkboxes) {
+      if (!cb.classList.contains('checked')) continue;
+      const medId = cb.dataset.medId;
+      const med = await DB.getMedication(medId);
+      if (!med) continue;
+
+      const status = cb.dataset.status || 'Taken';
+      await DB.addEvent({
+        eventType: 'medication',
+        medName: med.name,
+        dosage: med.dosage,
+        status,
+        timeOfDay,
+        timestamp
+      });
+      count++;
+    }
+
+    if (count === 0) {
+      UI.showToast('No medications selected', 'info');
+      return;
+    }
+
+    UI.closeModal();
+    UI.showToast(`${count} medication${count > 1 ? 's' : ''} logged`, 'success');
+    await this.openDetail('medication', true);
+  },
+
+  toggleRetroMedCheck(index) {
+    const el = document.getElementById(`retro-med-${index}`);
+    if (el.classList.contains('checked')) {
+      // Checked → Skipped
+      if (el.dataset.status === 'Taken') {
+        el.dataset.status = 'Skipped';
+        el.classList.add('skipped');
+        el.innerHTML = '<i data-lucide="x"></i>';
+      } else {
+        // Skipped → Unchecked
+        el.classList.remove('checked', 'skipped');
+        el.dataset.status = '';
+        el.innerHTML = '';
+      }
+    } else {
+      // Unchecked → Taken
+      el.classList.add('checked');
+      el.classList.remove('skipped');
+      el.dataset.status = 'Taken';
+      el.innerHTML = '<i data-lucide="check"></i>';
+    }
+    lucide.createIcons();
   },
 
   /* ---------- Home Action Handlers ---------- */
