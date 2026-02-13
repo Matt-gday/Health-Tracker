@@ -389,7 +389,34 @@ const DB = {
   async getDailySummary(dateStr) {
     const [start, end] = this._localDayRange(dateStr);
     const allEvents = await this.getEventsInRange(start, end);
-    return this._buildSummaryFromEvents(allEvents);
+
+    // Also find sleep events that ENDED today but STARTED yesterday
+    // (e.g. fell asleep 11pm last night, woke 7am today)
+    const yd = new Date(dateStr + 'T12:00:00');
+    yd.setDate(yd.getDate() - 1);
+    const ydStr = this._localDateStr(yd);
+    const [ydStart, ydEnd] = this._localDayRange(ydStr);
+    const ydEvents = await this.getEventsInRange(ydStart, ydEnd, 'sleep');
+    const overnightSleep = ydEvents.filter(e => {
+      if (!e.endTime) return false;
+      const wakeDate = this._localDateStr(new Date(e.endTime));
+      return wakeDate === dateStr;
+    });
+
+    // Remove any sleep events from allEvents whose endTime is NOT today
+    // (sleep started today but actually belongs to tomorrow if they haven't woken yet)
+    const todaySleep = allEvents.filter(e => e.eventType === 'sleep');
+    const nonSleepEvents = allEvents.filter(e => e.eventType !== 'sleep');
+
+    // Keep sleep events started today whose endTime is also today (or no endTime = still active)
+    const todaySleepKept = todaySleep.filter(e => {
+      if (!e.endTime) return true; // still sleeping, keep it
+      const wakeDate = this._localDateStr(new Date(e.endTime));
+      return wakeDate === dateStr;
+    });
+
+    const finalEvents = [...nonSleepEvents, ...todaySleepKept, ...overnightSleep];
+    return this._buildSummaryFromEvents(finalEvents);
   },
 
   _buildSummaryFromEvents(events) {
@@ -420,7 +447,8 @@ const DB = {
         count: bpEvents.length,
         lastSys: lastBp?.systolic || 0,
         lastDia: lastBp?.diastolic || 0,
-        lastHr: lastBp?.heartRate || 0
+        lastHr: lastBp?.heartRate || 0,
+        readings: bpEvents.sort((a, b) => a.timestamp.localeCompare(b.timestamp))
       },
       sleep: {
         totalMin: sleepEvents.reduce((s, e) => s + (e.duration_min || 0), 0),

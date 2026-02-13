@@ -419,6 +419,12 @@ const DataSource = {
      When Demo is off, return ONLY real data from IndexedDB.
      This is a clean switch, not a merge. */
 
+  _localDateKey(iso) {
+    if (!iso) return 'unknown';
+    const d = new Date(iso);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  },
+
   async getAllEvents(eventType, limit) {
     if (Demo.isActive) {
       return Demo.getEvents(eventType)
@@ -469,9 +475,18 @@ const DataSource = {
 
   async getDailySummary(dateStr) {
     if (Demo.isActive) {
-      const demoEvents = Demo.getEvents().filter(e =>
-        e.timestamp >= dateStr + 'T00:00:00' && e.timestamp <= dateStr + 'T23:59:59');
-      return DB._buildSummaryFromEvents(demoEvents);
+      const allDemo = Demo.getEvents();
+      // Non-sleep events for today (by timestamp)
+      const todayNonSleep = allDemo.filter(e =>
+        e.eventType !== 'sleep' &&
+        this._localDateKey(e.timestamp) === dateStr);
+      // Sleep events: use endTime (wake time) to determine day
+      const todaySleep = allDemo.filter(e => {
+        if (e.eventType !== 'sleep') return false;
+        if (!e.endTime) return this._localDateKey(e.timestamp) === dateStr;
+        return this._localDateKey(e.endTime) === dateStr;
+      });
+      return DB._buildSummaryFromEvents([...todayNonSleep, ...todaySleep]);
     }
     return DB.getDailySummary(dateStr);
   }

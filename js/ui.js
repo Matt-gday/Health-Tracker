@@ -65,6 +65,14 @@ const UI = {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   },
 
+  /* Get the date key for an event — sleep uses wake time (endTime) */
+  eventDateKey(event) {
+    if (event.eventType === 'sleep' && event.endTime) {
+      return this.localDateKey(event.endTime);
+    }
+    return this.localDateKey(event.timestamp);
+  },
+
   localISOString(date) {
     const d = date || new Date();
     const offset = d.getTimezoneOffset();
@@ -163,8 +171,17 @@ const UI = {
       items.push({ icon: 'heart', label: 'AFib', value: `${s.afib.count} event${s.afib.count > 1 ? 's' : ''}`, cls: 'stat-afib', filter: 'afib' });
     }
 
-    // BP/HR - show latest reading with category color
-    if (s.bp.count > 0) {
+    // BP/HR - show ALL readings stacked, earliest first
+    if (s.bp.count > 0 && s.bp.readings) {
+      const bpLines = s.bp.readings.map(r => {
+        const cat = this.bpCategory(r.systolic, r.diastolic);
+        const tag = cat.label ? ` <span style="color:${cat.color};font-weight:600;font-size:var(--font-xs)">${cat.label}</span>` : '';
+        const ctx = r.medContext ? ` · ${r.medContext}` : '';
+        const time = new Date(r.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return `${r.systolic || '—'}/${r.diastolic || '—'} · ${r.heartRate || '—'} bpm${ctx}${tag} <span style="color:var(--text-tertiary);font-size:var(--font-xs)">${time}</span>`;
+      });
+      items.push({ icon: 'activity', label: 'BP / HR', value: bpLines[0], valueSub: bpLines.length > 1 ? bpLines.slice(1).join('<br>') : '', cls: '', filter: 'bp_hr' });
+    } else if (s.bp.count > 0) {
       const bpCat = this.bpCategory(s.bp.lastSys, s.bp.lastDia);
       const bpTag = bpCat.label ? ` <span style="color:${bpCat.color};font-weight:600;font-size:var(--font-xs)">${bpCat.label}</span>` : '';
       items.push({ icon: 'activity', label: 'BP / HR', value: `${s.bp.lastSys}/${s.bp.lastDia} · ${s.bp.lastHr} bpm${bpTag}`, cls: '', filter: 'bp_hr' });
@@ -208,18 +225,18 @@ const UI = {
       const totalF = Math.round((s.food.fat || 0) + (s.drink.fat || 0));
       const totalSodium = Math.round((s.food.sodium || 0) + (s.drink.sodium || 0));
       const totalCaffeine = Math.round(s.drink.caffeine || 0);
-      // Line 1: calories + macros with emoji icons
+      // Line 1: kcal, protein, fat, carbs
       let line1 = totalCal > 0 ? `🔥 ${totalCal} kcal` : '';
       const macros = [];
       if (totalP > 0) macros.push(`🥩 ${totalP}g`);
-      if (totalC > 0) macros.push(`🍚 ${totalC}g`);
       if (totalF > 0) macros.push(`🧈 ${totalF}g`);
+      if (totalC > 0) macros.push(`🍚 ${totalC}g`);
       if (macros.length > 0) line1 += (line1 ? '  ' : '') + macros.join(' ');
-      // Line 2: fluid, caffeine, sodium
+      // Line 2: fluid, salt, caffeine
       const line2Parts = [];
       if (hasDrink) line2Parts.push(`💧 ${s.drink.totalMl.toLocaleString()} mL`);
-      if (totalCaffeine > 0) line2Parts.push(`☕ ${totalCaffeine} mg`);
       if (totalSodium > 0) line2Parts.push(`🧂 ${totalSodium} mg`);
+      if (totalCaffeine > 0) line2Parts.push(`☕ ${totalCaffeine} mg`);
       const line2 = line2Parts.join('  ');
       const nutVal = line1 || 'Logged';
       const nutSub = line2 || '';
@@ -247,8 +264,10 @@ const UI = {
             <i data-lucide="${it.icon}"></i>
             <div class="summary-item-text">
               <span class="summary-label">${it.label}</span>
-              <span class="summary-value">${it.value}</span>
-              ${it.valueSub ? `<span class="summary-value-sub">${it.valueSub}</span>` : ''}
+              <div class="summary-values">
+                <span class="summary-value">${it.value}</span>
+                ${it.valueSub ? `<span class="summary-value-sub">${it.valueSub}</span>` : ''}
+              </div>
             </div>
             <i data-lucide="chevron-right" class="summary-arrow"></i>
           </button>`).join('')}
@@ -289,9 +308,10 @@ const UI = {
     }
 
     // Group by local date (not UTC) so headings match the user's timezone
+    // Sleep events are grouped by wake time (endTime), not start time
     const grouped = {};
     events.forEach(e => {
-      const dateKey = this.localDateKey(e.timestamp);
+      const dateKey = this.eventDateKey(e);
       if (!grouped[dateKey]) grouped[dateKey] = [];
       grouped[dateKey].push(e);
     });
@@ -979,11 +999,11 @@ const UI = {
     // Chart placeholder
     html += '<div class="chart-container"><canvas id="detail-chart"></canvas></div>';
 
-    // Events list — grouped by local date
+    // Events list — grouped by local date (sleep uses wake time)
     if (events && events.length > 0) {
       const grouped = {};
       events.forEach(e => {
-        const dateKey = this.localDateKey(e.timestamp);
+        const dateKey = this.eventDateKey(e);
         if (!grouped[dateKey]) grouped[dateKey] = [];
         grouped[dateKey].push(e);
       });

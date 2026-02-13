@@ -411,9 +411,8 @@ a {
 
 .summary-item-text {
   display: flex;
-  flex-wrap: wrap;
   align-items: baseline;
-  gap: 2px 6px;
+  gap: 6px;
   min-width: 0;
   flex: 1;
 }
@@ -428,22 +427,25 @@ a {
   line-height: 1.2;
 }
 
+.summary-values {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
 .summary-value {
   font-size: var(--font-sm);
   font-weight: 600;
   color: var(--text-primary);
-  line-height: 1.4;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.5;
 }
 
 .summary-value-sub {
   font-size: var(--font-xs);
   font-weight: 500;
   color: var(--text-secondary);
-  white-space: nowrap;
-  width: 100%;
+  line-height: 1.5;
 }
 
 /* AFib highlight */
