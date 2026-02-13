@@ -262,12 +262,9 @@ const UI = {
         ${items.map(it => `
           <button class="summary-item ${it.cls}" onclick="${it.isDetail ? `App.openDetail('${it.filter}')` : `App.openHistoryFiltered('${it.filter}')`}">
             <i data-lucide="${it.icon}"></i>
-            <div class="summary-item-text">
-              <span class="summary-label">${it.label}</span>
-              <div class="summary-values">
-                <span class="summary-value">${it.value}</span>
-                ${it.valueSub ? `<span class="summary-value-sub">${it.valueSub}</span>` : ''}
-              </div>
+            <div class="summary-values">
+              <span class="summary-value">${it.value}</span>
+              ${it.valueSub ? `<span class="summary-value-sub">${it.valueSub}</span>` : ''}
             </div>
             <i data-lucide="chevron-right" class="summary-arrow"></i>
           </button>`).join('')}
@@ -571,6 +568,14 @@ const UI = {
   buildFoodEntryForm(existingData = null) {
     const data = existingData || {};
     const ts = data.timestamp ? this.localISOString(new Date(data.timestamp)) : this.localISOString();
+    // When editing, stored values are totals (per-unit × quantity).
+    // Divide back to per-unit so the quantity multiplier works correctly on save.
+    const q = data.quantity || 1;
+    const perCal = data.calories ? Math.round((data.calories / q) * 10) / 10 : '';
+    const perP = data.protein_g ? Math.round((data.protein_g / q) * 10) / 10 : '';
+    const perC = data.carbs_g ? Math.round((data.carbs_g / q) * 10) / 10 : '';
+    const perF = data.fat_g ? Math.round((data.fat_g / q) * 10) / 10 : '';
+    const perS = data.sodium_mg ? Math.round((data.sodium_mg / q) * 10) / 10 : '';
     return `
       <div class="form-group">
         <label>Food Name</label>
@@ -594,27 +599,27 @@ const UI = {
         <input type="number" step="0.25" class="form-input" id="food-quantity" placeholder="1" value="${data.quantity || 1}" inputmode="decimal">
       </div>
       <div class="form-group">
-        <label>Calories (kcal)</label>
-        <input type="number" step="1" class="form-input" id="food-calories" placeholder="0" value="${data.calories || ''}" inputmode="numeric">
+        <label>Calories per serving (kcal)</label>
+        <input type="number" step="1" class="form-input" id="food-calories" placeholder="0" value="${perCal}" inputmode="numeric">
       </div>
       <div class="input-row">
         <div class="form-group">
           <label>Protein (g)</label>
-          <input type="number" step="0.1" class="form-input" id="food-protein" placeholder="0" value="${data.protein_g || ''}" inputmode="decimal">
+          <input type="number" step="0.1" class="form-input" id="food-protein" placeholder="0" value="${perP}" inputmode="decimal">
         </div>
         <div class="form-group">
           <label>Carbs (g)</label>
-          <input type="number" step="0.1" class="form-input" id="food-carbs" placeholder="0" value="${data.carbs_g || ''}" inputmode="decimal">
+          <input type="number" step="0.1" class="form-input" id="food-carbs" placeholder="0" value="${perC}" inputmode="decimal">
         </div>
       </div>
       <div class="input-row">
         <div class="form-group">
           <label>Fat (g)</label>
-          <input type="number" step="0.1" class="form-input" id="food-fat" placeholder="0" value="${data.fat_g || ''}" inputmode="decimal">
+          <input type="number" step="0.1" class="form-input" id="food-fat" placeholder="0" value="${perF}" inputmode="decimal">
         </div>
         <div class="form-group">
           <label>Sodium (mg)</label>
-          <input type="number" step="1" class="form-input" id="food-sodium" placeholder="0" value="${data.sodium_mg || ''}" inputmode="numeric">
+          <input type="number" step="1" class="form-input" id="food-sodium" placeholder="0" value="${perS}" inputmode="numeric">
         </div>
       </div>
       <div class="form-group">
