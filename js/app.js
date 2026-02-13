@@ -547,6 +547,9 @@ const App = {
       return;
     }
 
+    // Auto-detect pre/post medication context
+    data.medContext = await this._detectMedContext(data.timestamp);
+
     if (this._editingEventId) {
       await DB.updateEvent(this._editingEventId, data);
       UI.showToast('BP/HR reading updated', 'success');
@@ -557,6 +560,23 @@ const App = {
     UI.closeModal();
     this._editingEventId = null;
     await this.renderCurrentTab();
+  },
+
+  /**
+   * Checks today's medication events to determine if BP was taken
+   * before or after the most recent medication dose.
+   * Returns 'Pre-Meds', 'Post-Meds', or null if no meds today.
+   */
+  async _detectMedContext(bpTimestampISO) {
+    const dateKey = UI.localDateKey(bpTimestampISO);
+    const allMeds = await DataSource.getAllEvents('medication', 200);
+    const todayMeds = allMeds.filter(m => UI.localDateKey(m.timestamp) === dateKey && m.status === 'Taken');
+    if (todayMeds.length === 0) return null;
+
+    // Find the latest medication taken before or at the BP time
+    const bpTime = new Date(bpTimestampISO).getTime();
+    const medsBefore = todayMeds.filter(m => new Date(m.timestamp).getTime() <= bpTime);
+    return medsBefore.length > 0 ? 'Post-Meds' : 'Pre-Meds';
   },
 
   openWeightEntry(existingData = null) {

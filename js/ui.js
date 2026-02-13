@@ -206,19 +206,21 @@ const UI = {
       const totalP = Math.round((s.food.protein || 0) + (s.drink.protein || 0));
       const totalC = Math.round((s.food.carbs || 0) + (s.drink.carbs || 0));
       const totalF = Math.round((s.food.fat || 0) + (s.drink.fat || 0));
+      const totalSodium = Math.round((s.food.sodium || 0) + (s.drink.sodium || 0));
       const totalCaffeine = Math.round(s.drink.caffeine || 0);
-      // Line 1: calories + macros
-      let line1 = totalCal > 0 ? `${totalCal} kcal` : '';
+      // Line 1: calories + macros with emoji icons
+      let line1 = totalCal > 0 ? `🔥 ${totalCal} kcal` : '';
       const macros = [];
-      if (totalP > 0) macros.push(`P:${totalP}g`);
-      if (totalC > 0) macros.push(`C:${totalC}g`);
-      if (totalF > 0) macros.push(`F:${totalF}g`);
-      if (macros.length > 0) line1 += (line1 ? ' · ' : '') + macros.join(' · ');
-      // Line 2: fluid + caffeine
+      if (totalP > 0) macros.push(`🥩 ${totalP}g`);
+      if (totalC > 0) macros.push(`🍚 ${totalC}g`);
+      if (totalF > 0) macros.push(`🧈 ${totalF}g`);
+      if (macros.length > 0) line1 += (line1 ? '  ' : '') + macros.join(' ');
+      // Line 2: fluid, caffeine, sodium
       const line2Parts = [];
       if (hasDrink) line2Parts.push(`💧 ${s.drink.totalMl.toLocaleString()} mL`);
       if (totalCaffeine > 0) line2Parts.push(`☕ ${totalCaffeine} mg`);
-      const line2 = line2Parts.join('  ·  ');
+      if (totalSodium > 0) line2Parts.push(`🧂 ${totalSodium} mg`);
+      const line2 = line2Parts.join('  ');
       const nutVal = line1 || 'Logged';
       const nutSub = line2 || '';
       items.push({ icon: 'utensils', label: 'Nutrition', value: nutVal, valueSub: nutSub, cls: '', filter: 'nutrition', isDetail: true });
@@ -373,6 +375,7 @@ const UI = {
         const bpParts = [];
         if (event.systolic || event.diastolic) bpParts.push(`${event.systolic || '—'}/${event.diastolic || '—'} mmHg`);
         if (event.heartRate) bpParts.push(`${event.heartRate} BPM`);
+        if (event.medContext) bpParts.push(event.medContext);
         const cat = this.bpCategory(event.systolic, event.diastolic);
         return {
           icon: 'activity', iconClass: 'bp',
