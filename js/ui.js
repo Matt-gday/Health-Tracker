@@ -226,7 +226,7 @@ const UI = {
       const totalSodium = Math.round((s.food.sodium || 0) + (s.drink.sodium || 0));
       const totalCaffeine = Math.round(s.drink.caffeine || 0);
       // Line 1: kcal, protein, fat, carbs
-      let line1 = totalCal > 0 ? `🔥 ${totalCal} kcal` : '';
+      let line1 = totalCal > 0 ? `🔥 ${totalCal}` : '';
       const macros = [];
       if (totalP > 0) macros.push(`🥩 ${totalP}g`);
       if (totalF > 0) macros.push(`🧈 ${totalF}g`);

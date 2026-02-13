@@ -3,7 +3,7 @@
    Offline-first caching strategy
    ============================================ */
 
-const CACHE_NAME = 'heart-tracker-v1.6.7';
+const CACHE_NAME = 'heart-tracker-v1.6.8';
 const ASSETS = [
   './',
   './index.html',
