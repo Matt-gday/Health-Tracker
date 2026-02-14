@@ -463,7 +463,7 @@ const DB = {
         count: walkEvents.length
       },
       steps: {
-        total: stepsEvents.reduce((s, e) => s + (e.step_count || 0), 0)
+        total: stepsEvents.reduce((s, e) => s + (e.steps || e.step_count || 0), 0)
       },
       food: {
         count: foodEvents.length,
@@ -481,11 +481,13 @@ const DB = {
         fat: drinkEvents.reduce((s, e) => s + (e.fat_g || 0), 0),
         sodium: drinkEvents.reduce((s, e) => s + (e.sodium_mg || 0), 0),
         caffeine: drinkEvents.reduce((s, e) => s + (e.caffeine_mg || 0), 0),
+        alcohol: drinkEvents.reduce((s, e) => s + (e.alcohol_units || 0), 0),
         count: drinkEvents.length
       },
       meds: {
         takenCount: medEvents.length,
-        totalCount: 0 // Will be filled in by caller with actual med count
+        totalCount: 0, // Will be filled in by caller with actual med count
+        events: medEvents // Raw med events for dynamic BP med-context calculation
       }
     };
   },
@@ -496,17 +498,7 @@ const DB = {
     const seeded = await this.getSetting('seeded');
     if (seeded) return;
 
-    // Pre-load medications
-    const defaultMeds = [
-      { name: 'Sotalol Hydrochloride 80mg', dosage: 'Half tablet (40mg)', schedule: 'Both' },
-      { name: 'Telmisartan/Hydrochlorothiazide 80mg/25mg', dosage: '1 tablet', schedule: 'Morning' },
-      { name: 'Rilast Turbuhaler (Budesonide/Formoterol)', dosage: '1 inhalation', schedule: 'Both' },
-      { name: 'Super Multi Plus (Ethical Nutrients)', dosage: '1 tablet', schedule: 'Morning' }
-    ];
-
-    for (const med of defaultMeds) {
-      await this.addMedication(med);
-    }
+    // Medications list starts empty — user adds their own
 
     // Pre-load user info
     await this.setSetting('userName', 'Matt Allan');

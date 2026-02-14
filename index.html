@@ -24,6 +24,7 @@
         <h1>Heart Tracker</h1>
         <div class="header-action" style="display:flex;align-items:center;gap:8px;">
           <button id="demo-toggle" onclick="Demo.toggle()" style="font-size:10px;padding:3px 8px;border-radius:10px;border:none;background:var(--bg-tertiary);color:var(--text-secondary);cursor:pointer;font-weight:600;letter-spacing:0.5px;">Demo</button>
+          <button onclick="App.exportDemoCSV()" style="font-size:10px;padding:3px 8px;border-radius:10px;border:none;background:var(--bg-tertiary);color:var(--text-secondary);cursor:pointer;font-weight:600;letter-spacing:0.5px;">Demo Export</button>
           <span style="font-size:13px;color:var(--text-tertiary)" id="home-date"></span>
         </div>
       </div>
@@ -34,12 +35,12 @@
       </div>
     </div>
 
-    <!-- Dashboard Page -->
-    <div class="page" id="page-dashboard">
+    <!-- AFib Insights Page -->
+    <div class="page" id="page-afib-insights">
       <div class="page-header with-safe-area">
-        <h1>Dashboard</h1>
+        <h1>AFib Insights</h1>
       </div>
-      <div class="page-content" id="dashboard-content">
+      <div class="page-content" id="afib-insights-content">
         <!-- Rendered by JS -->
       </div>
     </div>
@@ -89,9 +90,9 @@
         <i data-lucide="home"></i>
         <span>Home</span>
       </button>
-      <button class="tab-btn" data-tab="dashboard" onclick="App.switchTab('dashboard')">
-        <i data-lucide="bar-chart-3"></i>
-        <span>Dashboard</span>
+      <button class="tab-btn" data-tab="afib-insights" onclick="App.switchTab('afib-insights')">
+        <i data-lucide="heart-pulse"></i>
+        <span>AFib</span>
       </button>
       <button class="tab-btn" data-tab="history" onclick="App.switchTab('history')">
         <i data-lucide="clock"></i>
@@ -110,7 +111,7 @@
     <div class="modal-sheet" id="modal-sheet">
       <div class="modal-header">
         <h2 id="modal-title"></h2>
-        <button class="modal-close-btn" onclick="App.closeModal()">
+        <button class="modal-close-btn" id="modal-close-btn" onclick="App.closeModal()">
           <i data-lucide="x"></i>
         </button>
       </div>

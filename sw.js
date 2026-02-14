@@ -3,7 +3,7 @@
    Offline-first caching strategy
    ============================================ */
 
-const CACHE_NAME = 'heart-tracker-v1.6.11';
+const CACHE_NAME = 'heart-tracker-v2.2.0';
 const ASSETS = [
   './',
   './index.html',
@@ -100,6 +100,8 @@ self.addEventListener('fetch', (event) => {
         if (event.request.headers.get('Accept')?.includes('text/html')) {
           return caches.match('./index.html');
         }
+        // Return a proper empty response for non-HTML requests (e.g. favicon)
+        return new Response('', { status: 408, statusText: 'Offline' });
       })
   );
 });

@@ -7,6 +7,13 @@ const Charts = {
   _dashboardChart: null,
   _detailChart: null,
 
+  /* Per-chart time range state — defaults */
+  _chartRanges: {
+    afib: 'month', bp_hr: 'month', sleep: 'month', weight: 'month',
+    activity: 'month', food: 'week', drink: 'week', nutrition: 'week', medication: 'month',
+    ventolin: 'month'
+  },
+
   /* Convert an ISO timestamp to a local YYYY-MM-DD string */
   _localDateKey(iso) {
     const d = new Date(iso);
@@ -20,68 +27,76 @@ const Charts = {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   },
 
-  /* ---------- Dashboard Chart ---------- */
-  async renderDashboard(layers, range) {
-    const canvas = document.getElementById('dashboard-chart');
-    if (!canvas) return;
-
-    if (this._dashboardChart) {
-      this._dashboardChart.destroy();
-      this._dashboardChart = null;
-    }
-
-    if (!layers || layers.length === 0) {
-      const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = '#9CA3AF';
-      ctx.font = '14px -apple-system, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('Toggle data layers below to visualize', canvas.width / 2, canvas.height / 2);
-      return;
-    }
-
-    const dateRange = this._getDateRange(range);
-    const datasets = [];
-    const allLabels = this._generateLabels(range, dateRange);
-
-    for (const layer of layers) {
-      const ds = await this._buildDataset(layer, dateRange, allLabels);
-      if (ds) datasets.push(...(Array.isArray(ds) ? ds : [ds]));
-    }
-
-    const ctx = canvas.getContext('2d');
-    this._dashboardChart = new Chart(ctx, {
-      type: 'line',
-      data: { labels: allLabels.map(l => this._formatLabel(l, range)), datasets },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
-        plugins: {
-          legend: { position: 'bottom', labels: { boxWidth: 12, padding: 8, font: { size: 11 } } },
-          tooltip: { backgroundColor: '#1A1A2E', titleFont: { size: 12 }, bodyFont: { size: 11 } }
-        },
-        scales: {
-          x: {
-            grid: { display: false },
-            ticks: { font: { size: 10 }, maxRotation: 0, maxTicksLimit: 7 }
-          },
-          y: {
-            grid: { color: '#F3F4F6' },
-            ticks: { font: { size: 10 } },
-            beginAtZero: false
-          }
-        }
-      }
-    });
+  /* Get the number of days for the current range of a chart type */
+  _rangeDays(type) {
+    const r = this._chartRanges[type] || 'month';
+    if (r === 'week') return 7;
+    if (r === 'month') return 30;
+    if (r === '3month') return 90;
+    return null; // 'all'
   },
 
+  /* Filter sorted events by the range for a given chart type */
+  _filterByRange(sorted, type) {
+    const days = this._rangeDays(type);
+    if (!days) return sorted; // all time
+    const cutoff = new Date(Date.now() - days * 86400000);
+    const filtered = sorted.filter(e => new Date(e.timestamp) >= cutoff);
+    return filtered.length > 0 ? filtered : sorted; // fallback if empty
+  },
+
+  /* Generate day labels array for the current range */
+  _rangeDayLabels(type) {
+    const days = this._rangeDays(type) || 180; // cap 'all' at 6 months for day-based charts
+    const labels = [];
+    for (let i = days - 1; i >= 0; i--) {
+      labels.push(this._localDayStr(i));
+    }
+    return labels;
+  },
+
+  /* Consistent legend: outlined squares for lines, filled for bars */
+  _consistentLegend() {
+    return {
+      display: true,
+      position: 'bottom',
+      labels: {
+        boxWidth: 12,
+        boxHeight: 12,
+        padding: 10,
+        font: { size: 11 },
+        generateLabels: function(chart) {
+          return chart.data.datasets.map((ds, i) => {
+            const isBar = ds.type === 'bar' || (!ds.type && chart.config.type === 'bar');
+            const isDashed = ds.borderDash && ds.borderDash.length > 0;
+            return {
+              text: ds.label,
+              fillStyle: isBar ? (ds.backgroundColor || ds.borderColor) : 'transparent',
+              strokeStyle: ds.borderColor || ds.backgroundColor,
+              lineWidth: isBar ? 0 : 1.5,
+              lineDash: isDashed ? [3, 2] : [],
+              hidden: !chart.isDatasetVisible(i),
+              datasetIndex: i
+            };
+          });
+        }
+      }
+    };
+  },
+
+  /* Hidden dataset indices — preserved across range changes, reset on page close */
+  _hiddenDatasets: [],
+
   /* ---------- Detail Page Charts ---------- */
-  async renderDetail(type, events) {
+  async renderDetail(type, events, drinksAlcohol = false) {
     const canvas = document.getElementById('detail-chart');
     if (!canvas) return;
 
+    // Save current hidden state before destroying
     if (this._detailChart) {
+      this._hiddenDatasets = this._detailChart.data.datasets
+        .map((ds, i) => (!this._detailChart.isDatasetVisible(i)) ? ds.label : null)
+        .filter(l => l !== null);
       this._detailChart.destroy();
       this._detailChart = null;
     }
@@ -102,7 +117,7 @@ const Charts = {
         config = this._buildSleepChart(events);
         break;
       case 'weight':
-        config = this._buildWeightChart(events);
+        config = await this._buildWeightChart(events);
         break;
       case 'activity':
         config = this._buildActivityChart(events);
@@ -114,110 +129,28 @@ const Charts = {
         config = this._buildDrinkChart(events);
         break;
       case 'nutrition':
-        config = this._buildNutritionChart(events);
+        config = this._buildNutritionChart(events, drinksAlcohol);
         break;
       case 'medication':
         config = this._buildMedChart(events);
+        break;
+      case 'ventolin':
+        config = this._buildVentolinChart(events);
         break;
       default:
         return;
     }
 
     if (config) {
-      this._detailChart = new Chart(ctx, config);
-    }
-  },
-
-  /* ---------- Dataset Builders ---------- */
-  async _buildDataset(layer, dateRange, labels) {
-    const [start, end] = dateRange;
-    const startISO = start.toISOString();
-    const endISO = end.toISOString();
-
-    switch (layer) {
-      case 'bp': {
-        const events = await DataSource.getEventsInRange(startISO, endISO, 'bp_hr');
-        return [
-          {
-            label: 'Systolic',
-            data: this._mapToLabels(events.filter(e => e.systolic), labels, 'systolic'),
-            borderColor: '#EF4444',
-            backgroundColor: 'rgba(239,68,68,0.1)',
-            tension: 0.3, pointRadius: 3, borderWidth: 2
-          },
-          {
-            label: 'Diastolic',
-            data: this._mapToLabels(events.filter(e => e.diastolic), labels, 'diastolic'),
-            borderColor: '#00B3B7',
-            backgroundColor: 'rgba(0,179,183,0.1)',
-            tension: 0.3, pointRadius: 3, borderWidth: 2
+      // Re-apply hidden state by matching dataset labels
+      if (this._hiddenDatasets.length > 0) {
+        config.data.datasets.forEach(ds => {
+          if (this._hiddenDatasets.includes(ds.label)) {
+            ds.hidden = true;
           }
-        ];
+        });
       }
-      case 'hr': {
-        const events = await DataSource.getEventsInRange(startISO, endISO, 'bp_hr');
-        return {
-          label: 'Heart Rate',
-          data: this._mapToLabels(events.filter(e => e.heartRate), labels, 'heartRate'),
-          borderColor: '#F59E0B',
-          backgroundColor: 'rgba(245,158,11,0.1)',
-          tension: 0.3, pointRadius: 3, borderWidth: 2
-        };
-      }
-      case 'weight': {
-        const events = await DataSource.getEventsInRange(startISO, endISO, 'weight');
-        return {
-          label: 'Weight (kg)',
-          data: this._mapToLabels(events, labels, 'weight_kg'),
-          borderColor: '#00B3B7',
-          backgroundColor: 'rgba(0,179,183,0.1)',
-          tension: 0.3, pointRadius: 3, borderWidth: 2, fill: true
-        };
-      }
-      case 'sleep': {
-        const events = await DataSource.getEventsInRange(startISO, endISO, 'sleep');
-        const completed = events.filter(e => e.duration_min);
-        return {
-          label: 'Sleep (hours)',
-          data: this._mapToLabels(completed, labels, 'duration_min', v => Math.round(v / 60 * 10) / 10),
-          borderColor: '#8B5CF6',
-          backgroundColor: 'rgba(139,92,246,0.2)',
-          type: 'bar', borderWidth: 1, barPercentage: 0.6
-        };
-      }
-      case 'steps': {
-        const events = await DataSource.getEventsInRange(startISO, endISO, 'steps');
-        return {
-          label: 'Steps',
-          data: this._mapToLabels(events, labels, 'steps'),
-          borderColor: '#D97706',
-          backgroundColor: 'rgba(217,119,6,0.2)',
-          type: 'bar', borderWidth: 1, barPercentage: 0.6
-        };
-      }
-      case 'walk': {
-        const events = await DataSource.getEventsInRange(startISO, endISO, 'walk');
-        const completed = events.filter(e => e.duration_min);
-        return {
-          label: 'Walk (min)',
-          data: this._mapToLabels(completed, labels, 'duration_min'),
-          borderColor: '#10B981',
-          backgroundColor: 'rgba(16,185,129,0.2)',
-          type: 'bar', borderWidth: 1, barPercentage: 0.6
-        };
-      }
-      case 'drink': {
-        const events = await DataSource.getEventsInRange(startISO, endISO, 'drink');
-        return {
-          label: 'Fluid (mL)',
-          data: this._mapToLabels(events, labels, 'volume_ml'),
-          borderColor: '#00B3B7',
-          backgroundColor: 'rgba(0,179,183,0.25)',
-          type: 'bar', borderWidth: 1, barPercentage: 0.6
-        };
-      }
-      default:
-        return null;
+      this._detailChart = new Chart(ctx, config);
     }
   },
 
@@ -234,9 +167,21 @@ const Charts = {
   },
 
   _buildBpChart(events) {
-    const sorted = [...events].sort((a, b) => a.timestamp.localeCompare(b.timestamp)).slice(-30);
-    const labels = sorted.map(e => UI.formatDate(e.timestamp));
+    const allSorted = this._filterByRange(
+      [...events].sort((a, b) => a.timestamp.localeCompare(b.timestamp)), 'bp_hr'
+    );
 
+    // Compute global Y bounds from ALL readings in current time range (for fixed axis across contexts)
+    const allValues = allSorted.flatMap(e => [e.systolic, e.diastolic, e.heartRate].filter(v => v));
+    const globalMin = allValues.length > 0 ? Math.min(...allValues) - 10 : 50;
+    const globalMax = allValues.length > 0 ? Math.max(...allValues) + 10 : 200;
+
+    // Filter by BP context (morning / post-walk / evening)
+    const context = App._bpContext || 'morning';
+    const walks = App._cachedWalkEvents || [];
+    const sorted = allSorted.filter(e => App.classifyBpReading(e, walks) === context);
+
+    const labels = sorted.map(e => UI.formatDate(e.timestamp));
     const sysData = sorted.map(e => e.systolic || null);
     const diaData = sorted.map(e => e.diastolic || null);
     const hrData = sorted.map(e => e.heartRate || null);
@@ -254,11 +199,11 @@ const Charts = {
         const { ctx, chartArea: { left, right, top, bottom }, scales: { y } } = chart;
         if (!y) return;
         const zones = [
-          { min: 0,   max: 90,  color: 'rgba(59,130,246,0.06)' },   // Low zone
-          { min: 90,  max: 120, color: 'rgba(16,185,129,0.08)' },   // Normal zone
-          { min: 120, max: 130, color: 'rgba(236,72,153,0.06)' },   // Elevated zone
-          { min: 130, max: 140, color: 'rgba(236,72,153,0.10)' },   // High Stage 1
-          { min: 140, max: 200, color: 'rgba(220,38,38,0.08)' }     // High Stage 2+
+          { min: 0,   max: 90,  color: 'rgba(59,130,246,0.06)' },
+          { min: 90,  max: 120, color: 'rgba(16,185,129,0.08)' },
+          { min: 120, max: 130, color: 'rgba(236,72,153,0.06)' },
+          { min: 130, max: 140, color: 'rgba(236,72,153,0.10)' },
+          { min: 140, max: 200, color: 'rgba(220,38,38,0.08)' }
         ];
         ctx.save();
         zones.forEach(z => {
@@ -269,7 +214,6 @@ const Charts = {
             ctx.fillRect(left, Math.max(yTop, top), right - left, Math.min(yBot, bottom) - Math.max(yTop, top));
           }
         });
-        // Draw threshold lines
         const thresholds = [
           { val: 90,  color: 'rgba(59,130,246,0.3)', dash: [4,4] },
           { val: 120, color: 'rgba(16,185,129,0.4)', dash: [4,4] },
@@ -328,18 +272,23 @@ const Charts = {
             label: 'Heart Rate', data: hrData,
             borderColor: 'rgba(100,100,100,0.3)',
             pointBackgroundColor: '#6B7280',
-            tension: 0.3, pointRadius: 3, borderWidth: 1, borderDash: [5, 5]
+            tension: 0.3, pointRadius: 3, borderWidth: 1, borderDash: [3, 2]
           }
         ]
       },
       options: {
         ...this._defaultChartOptions(),
+        scales: {
+          x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 0, maxTicksLimit: 7 } },
+          y: {
+            grid: { color: '#F3F4F6' },
+            ticks: { font: { size: 10 } },
+            suggestedMin: globalMin,
+            suggestedMax: globalMax
+          }
+        },
         plugins: {
-          legend: {
-            display: true,
-            position: 'bottom',
-            labels: { boxWidth: 10, font: { size: 10 } }
-          },
+          legend: this._consistentLegend(),
           tooltip: {
             callbacks: {
               afterLabel: (ctx) => {
@@ -359,86 +308,199 @@ const Charts = {
     };
   },
 
-  _buildWeightChart(events) {
+  async _buildWeightChart(events) {
     const sorted = [...events].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    const filtered = this._filterByRange(sorted, 'weight');
+
+    const labels = filtered.map(e => UI.formatDate(e.timestamp));
+    const weights = filtered.map(e => e.weight_kg);
+
+    // Calculate EMA trend line (smoothing factor α = 0.3)
+    const alpha = 0.3;
+    const ema = [weights[0]];
+    for (let i = 1; i < weights.length; i++) {
+      ema.push(Math.round((alpha * weights[i] + (1 - alpha) * ema[i - 1]) * 10) / 10);
+    }
+
+    const goalWeight = await DB.getSetting('goalWeight');
+    const datasets = [
+      {
+        label: 'Weight',
+        data: weights,
+        borderColor: '#00B3B7',
+        backgroundColor: 'rgba(0,179,183,0.08)',
+        fill: true, tension: 0.2, pointRadius: 4, borderWidth: 2,
+        pointBackgroundColor: '#00B3B7'
+      },
+      {
+        label: 'Trend',
+        data: ema,
+        borderColor: '#F59E0B',
+        backgroundColor: 'transparent',
+        borderWidth: 1.5,
+        borderDash: [3, 2],
+        pointRadius: 0,
+        tension: 0.3,
+        fill: false
+      }
+    ];
+
+    // Always add goal dataset if a goal weight exists, but hidden by default
+    if (goalWeight) {
+      datasets.push({
+        label: 'Goal',
+        data: Array(weights.length).fill(goalWeight),
+        borderColor: '#10B981',
+        backgroundColor: 'transparent',
+        borderWidth: 1.5,
+        borderDash: [3, 2],
+        pointRadius: 0,
+        fill: false,
+        hidden: true
+      });
+    }
+
     return {
       type: 'line',
-      data: {
-        labels: sorted.map(e => UI.formatDate(e.timestamp)),
-        datasets: [{
-          label: 'Weight (kg)',
-          data: sorted.map(e => e.weight_kg),
-          borderColor: '#00B3B7',
-          backgroundColor: 'rgba(0,179,183,0.1)',
-          fill: true, tension: 0.3, pointRadius: 4, borderWidth: 2
-        }]
-      },
-      options: this._defaultChartOptions()
+      data: { labels, datasets },
+      options: {
+        ...this._defaultChartOptions(),
+        scales: {
+          y: {
+            ticks: { callback: v => v + ' kg' }
+          },
+          x: {
+            ticks: { maxRotation: 45, font: { size: 10 } }
+          }
+        },
+        plugins: {
+          legend: this._consistentLegend(),
+          tooltip: {
+            callbacks: {
+              label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y} kg`
+            }
+          }
+        }
+      }
     };
   },
 
   _buildSleepChart(events) {
-    const completed = events.filter(e => e.duration_min).sort((a, b) => a.timestamp.localeCompare(b.timestamp)).slice(-30);
+    const allCompleted = events.filter(e => e.duration_min).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    const completed = this._filterByRange(allCompleted, 'sleep');
+
+    // Calculate 7-night average trend
+    const hours = completed.map(e => Math.round(e.duration_min / 60 * 10) / 10);
+    const avg = [];
+    for (let i = 0; i < hours.length; i++) {
+      const window = hours.slice(Math.max(0, i - 6), i + 1);
+      avg.push(Math.round(window.reduce((a, b) => a + b, 0) / window.length * 10) / 10);
+    }
+
     return {
       type: 'bar',
       data: {
         labels: completed.map(e => UI.formatDate(e.timestamp)),
-        datasets: [{
-          label: 'Sleep (hours)',
-          data: completed.map(e => Math.round(e.duration_min / 60 * 10) / 10),
-          backgroundColor: 'rgba(139,92,246,0.6)',
-          borderColor: '#8B5CF6',
-          borderWidth: 1, borderRadius: 4
-        }]
+        datasets: [
+          {
+            label: 'Sleep (hrs)',
+            data: hours,
+            backgroundColor: 'rgba(139,92,246,0.6)',
+            borderColor: '#8B5CF6',
+            borderWidth: 1, borderRadius: 4
+          },
+          {
+            label: '7-night Avg',
+            data: avg,
+            type: 'line',
+            borderColor: '#F59E0B',
+            backgroundColor: 'transparent',
+            borderWidth: 1.5,
+            borderDash: [3, 2],
+            pointRadius: 0,
+            tension: 0.3,
+            fill: false
+          }
+        ]
       },
-      options: this._defaultChartOptions()
+      options: {
+        ...this._defaultChartOptions(),
+        plugins: {
+          legend: this._consistentLegend(),
+          tooltip: {
+            callbacks: {
+              label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y} hrs`
+            }
+          }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 0, maxTicksLimit: 7 } },
+          y: { grid: { color: '#F3F4F6' }, ticks: { font: { size: 10 }, callback: v => v + 'h' } }
+        }
+      }
     };
   },
 
   _buildAfibChart(events) {
-    // Calendar-style: events per day in last 30 days
-    const now = new Date();
-    const days = [];
-    for (let i = 29; i >= 0; i--) {
-      days.push(this._localDayStr(i));
-    }
+    const days = this._rangeDayLabels('afib');
+    const durationByDay = {};
     const countByDay = {};
-    events.filter(e => e.endTime).forEach(e => {
+    events.filter(e => e.endTime && e.duration_min).forEach(e => {
       const day = this._localDateKey(e.timestamp);
+      durationByDay[day] = (durationByDay[day] || 0) + e.duration_min;
       countByDay[day] = (countByDay[day] || 0) + 1;
     });
 
     return {
       type: 'bar',
       data: {
-        labels: days.map(d => { const dt = new Date(d); return `${dt.getDate()}/${dt.getMonth() + 1}`; }),
+        labels: days.map(d => { const dt = new Date(d + 'T12:00:00'); return `${dt.getDate()}/${dt.getMonth() + 1}`; }),
         datasets: [{
-          label: 'AFib Episodes',
-          data: days.map(d => countByDay[d] || 0),
-          backgroundColor: days.map(d => countByDay[d] ? 'rgba(245,158,11,0.7)' : 'rgba(229,231,235,0.3)'),
-          borderColor: days.map(d => countByDay[d] ? '#D97706' : 'transparent'),
+          label: 'AFib Duration (hrs)',
+          data: days.map(d => durationByDay[d] ? Math.round(durationByDay[d] / 60 * 10) / 10 : 0),
+          backgroundColor: days.map(d => durationByDay[d] ? 'rgba(245,158,11,0.7)' : 'rgba(229,231,235,0.3)'),
+          borderColor: days.map(d => durationByDay[d] ? '#D97706' : 'transparent'),
           borderWidth: 1, borderRadius: 3
         }]
       },
-      options: { ...this._defaultChartOptions(), plugins: { legend: { display: false } } }
+      options: {
+        ...this._defaultChartOptions(),
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => {
+                const day = days[ctx.dataIndex];
+                const hrs = ctx.parsed.y;
+                const count = countByDay[day] || 0;
+                return hrs > 0 ? `${hrs} hrs (${count} episode${count !== 1 ? 's' : ''})` : 'No episodes';
+              }
+            }
+          }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 0, maxTicksLimit: 7 } },
+          y: { grid: { color: '#F3F4F6' }, ticks: { font: { size: 10 }, callback: v => v + 'h' } }
+        }
+      }
     };
   },
 
   _buildActivityChart(events) {
+    const days = this._rangeDayLabels('activity');
     const walks = events.filter(e => e.eventType === 'walk' && e.duration_min);
     const steps = events.filter(e => e.eventType === 'steps');
-    const allDates = [...new Set([...walks, ...steps].map(e => (e.date || this._localDateKey(e.timestamp))))].sort().slice(-14);
 
     return {
       type: 'bar',
       data: {
-        labels: allDates.map(d => { const dt = new Date(d); return `${dt.getDate()}/${dt.getMonth() + 1}`; }),
+        labels: days.map(d => { const dt = new Date(d + 'T12:00:00'); return `${dt.getDate()}/${dt.getMonth() + 1}`; }),
         datasets: [
           {
             label: 'Walk (min)',
-            data: allDates.map(d => {
-              const w = walks.find(e => this._localDateKey(e.timestamp) === d);
-              return w ? w.duration_min : 0;
+            data: days.map(d => {
+              const dayWalks = walks.filter(e => this._localDateKey(e.timestamp) === d);
+              return dayWalks.reduce((s, e) => s + (e.duration_min || 0), 0);
             }),
             backgroundColor: 'rgba(16,185,129,0.6)',
             borderColor: '#10B981',
@@ -446,8 +508,8 @@ const Charts = {
           },
           {
             label: 'Steps',
-            data: allDates.map(d => {
-              const s = steps.find(e => e.date === d);
+            data: days.map(d => {
+              const s = steps.find(e => (e.date || this._localDateKey(e.timestamp)) === d);
               return s ? s.steps : 0;
             }),
             backgroundColor: 'rgba(217,119,6,0.4)',
@@ -458,8 +520,12 @@ const Charts = {
       },
       options: {
         ...this._defaultChartOptions(),
+        plugins: {
+          legend: this._consistentLegend(),
+          tooltip: { backgroundColor: '#1A1A2E', titleFont: { size: 12 }, bodyFont: { size: 11 } }
+        },
         scales: {
-          x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 0 } },
+          x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 0, maxTicksLimit: 7 } },
           y: { position: 'left', grid: { color: '#F3F4F6' }, title: { display: true, text: 'Walk (min)', font: { size: 10 } } },
           y1: { position: 'right', grid: { display: false }, title: { display: true, text: 'Steps', font: { size: 10 } } }
         }
@@ -468,12 +534,7 @@ const Charts = {
   },
 
   _buildFoodChart(events) {
-    // Daily macro totals for last 7 days
-    const days = [];
-    for (let i = 6; i >= 0; i--) {
-      days.push(this._localDayStr(i));
-    }
-    // Group events by local date
+    const days = this._rangeDayLabels('food');
     const byDay = {};
     events.forEach(e => { const dk = this._localDateKey(e.timestamp); if (!byDay[dk]) byDay[dk] = []; byDay[dk].push(e); });
     const dailyData = days.map(day => {
@@ -491,30 +552,26 @@ const Charts = {
       data: {
         labels: days.map(d => { const dt = new Date(d + 'T12:00:00'); return `${dt.getDate()}/${dt.getMonth() + 1}`; }),
         datasets: [
-          { label: 'Calories', data: dailyData.map(d => Math.round(d.calories)), type: 'line', borderColor: '#EF4444', backgroundColor: 'rgba(239,68,68,0.1)', tension: 0.3, pointRadius: 3, borderWidth: 2, yAxisID: 'y1', fill: false },
-          { label: 'Protein (g)', data: dailyData.map(d => Math.round(d.protein)), backgroundColor: 'rgba(16,185,129,0.6)', borderRadius: 3, yAxisID: 'y' },
-          { label: 'Carbs (g)', data: dailyData.map(d => Math.round(d.carbs)), backgroundColor: 'rgba(59,130,246,0.6)', borderRadius: 3, yAxisID: 'y' },
-          { label: 'Fat (g)', data: dailyData.map(d => Math.round(d.fat)), backgroundColor: 'rgba(245,158,11,0.6)', borderRadius: 3, yAxisID: 'y' }
+          { label: 'Calories', data: dailyData.map(d => Math.round(d.calories)), type: 'line', borderColor: '#EF4444', backgroundColor: 'transparent', tension: 0.3, pointRadius: 3, borderWidth: 2, yAxisID: 'y1', fill: false },
+          { label: 'Protein (g)', data: dailyData.map(d => Math.round(d.protein)), backgroundColor: 'rgba(16,185,129,0.6)', borderColor: '#10B981', borderRadius: 3, yAxisID: 'y' },
+          { label: 'Carbs (g)', data: dailyData.map(d => Math.round(d.carbs)), backgroundColor: 'rgba(59,130,246,0.6)', borderColor: '#3B82F6', borderRadius: 3, yAxisID: 'y' },
+          { label: 'Fat (g)', data: dailyData.map(d => Math.round(d.fat)), backgroundColor: 'rgba(245,158,11,0.6)', borderColor: '#F59E0B', borderRadius: 3, yAxisID: 'y' }
         ]
       },
       options: {
         ...this._defaultChartOptions(),
         scales: {
-          x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 0 } },
+          x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 0, maxTicksLimit: 7 } },
           y: { position: 'left', grid: { color: '#F3F4F6' }, title: { display: true, text: 'Macros (g)', font: { size: 10 } } },
           y1: { position: 'right', grid: { display: false }, title: { display: true, text: 'Calories', font: { size: 10 } } }
         },
-        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } }
+        plugins: { legend: this._consistentLegend() }
       }
     };
   },
 
   _buildDrinkChart(events) {
-    const days = [];
-    for (let i = 6; i >= 0; i--) {
-      days.push(this._localDayStr(i));
-    }
-    // Group events by local date
+    const days = this._rangeDayLabels('drink');
     const byDay = {};
     events.forEach(e => { const dk = this._localDateKey(e.timestamp); if (!byDay[dk]) byDay[dk] = []; byDay[dk].push(e); });
 
@@ -522,26 +579,46 @@ const Charts = {
       type: 'bar',
       data: {
         labels: days.map(d => { const dt = new Date(d + 'T12:00:00'); return `${dt.getDate()}/${dt.getMonth() + 1}`; }),
-        datasets: [{
-          label: 'Fluid (mL)',
-          data: days.map(day => {
-            return (byDay[day] || []).reduce((s, e) => s + (e.volume_ml || 0), 0);
-          }),
-          backgroundColor: 'rgba(0,179,183,0.5)',
-          borderColor: '#00B3B7',
-          borderWidth: 1, borderRadius: 4
-        }]
+        datasets: [
+          {
+            label: 'Fluid (mL)',
+            data: days.map(day => (byDay[day] || []).reduce((s, e) => s + (e.volume_ml || 0), 0)),
+            backgroundColor: 'rgba(0,179,183,0.5)',
+            borderColor: '#00B3B7',
+            borderWidth: 1, borderRadius: 4
+          },
+          {
+            label: 'Caffeine (mg)',
+            data: days.map(day => (byDay[day] || []).reduce((s, e) => s + (e.caffeine_mg || 0), 0)),
+            type: 'line',
+            borderColor: '#6B7280',
+            backgroundColor: 'transparent',
+            borderWidth: 1.5,
+            borderDash: [3, 2],
+            pointRadius: 2,
+            tension: 0.3,
+            fill: false,
+            yAxisID: 'y1'
+          }
+        ]
       },
-      options: this._defaultChartOptions()
+      options: {
+        ...this._defaultChartOptions(),
+        plugins: {
+          legend: this._consistentLegend(),
+          tooltip: { backgroundColor: '#1A1A2E', titleFont: { size: 12 }, bodyFont: { size: 11 } }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 0, maxTicksLimit: 7 } },
+          y: { position: 'left', grid: { color: '#F3F4F6' }, title: { display: true, text: 'Fluid (mL)', font: { size: 10 } } },
+          y1: { position: 'right', grid: { display: false }, title: { display: true, text: 'Caffeine (mg)', font: { size: 10 } } }
+        }
+      }
     };
   },
 
-  _buildNutritionChart(events) {
-    // Combined food + drink macros per day for last 7 days
-    const days = [];
-    for (let i = 6; i >= 0; i--) {
-      days.push(this._localDayStr(i));
-    }
+  _buildNutritionChart(events, drinksAlcohol = false) {
+    const days = this._rangeDayLabels('nutrition');
     const byDay = {};
     events.forEach(e => {
       const dk = this._localDateKey(e.timestamp);
@@ -550,45 +627,52 @@ const Charts = {
     });
     const dailyData = days.map(day => {
       const dayEvents = byDay[day] || [];
+      const drinks = dayEvents.filter(e => e.eventType === 'drink');
       return {
         calories: dayEvents.reduce((s, e) => s + (e.calories || 0), 0),
         protein: dayEvents.reduce((s, e) => s + (e.protein_g || 0), 0),
         carbs: dayEvents.reduce((s, e) => s + (e.carbs_g || 0), 0),
         fat: dayEvents.reduce((s, e) => s + (e.fat_g || 0), 0),
-        fluid: dayEvents.filter(e => e.eventType === 'drink').reduce((s, e) => s + (e.volume_ml || 0), 0)
+        sodium: dayEvents.reduce((s, e) => s + (e.sodium_mg || 0), 0),
+        caffeine: drinks.reduce((s, e) => s + (e.caffeine_mg || 0), 0),
+        alcohol: drinksAlcohol ? drinks.reduce((s, e) => s + (e.alcohol_units || 0), 0) : 0
       };
     });
+
+    const datasets = [
+      { label: 'Calories', data: dailyData.map(d => Math.round(d.calories)), type: 'line', borderColor: '#EF4444', backgroundColor: 'transparent', tension: 0.3, pointRadius: 3, borderWidth: 2, yAxisID: 'y1', fill: false },
+      { label: 'Protein (g)', data: dailyData.map(d => Math.round(d.protein)), backgroundColor: 'rgba(16,185,129,0.6)', borderColor: '#10B981', borderRadius: 3, yAxisID: 'y' },
+      { label: 'Carbs (g)', data: dailyData.map(d => Math.round(d.carbs)), backgroundColor: 'rgba(59,130,246,0.6)', borderColor: '#3B82F6', borderRadius: 3, yAxisID: 'y' },
+      { label: 'Fat (g)', data: dailyData.map(d => Math.round(d.fat)), backgroundColor: 'rgba(245,158,11,0.6)', borderColor: '#F59E0B', borderRadius: 3, yAxisID: 'y' },
+      { label: 'Sodium (mg)', data: dailyData.map(d => Math.round(d.sodium)), type: 'line', borderColor: '#8B5CF6', backgroundColor: 'transparent', tension: 0.3, pointRadius: 3, borderWidth: 1.5, borderDash: [3, 2], yAxisID: 'y2', fill: false },
+      { label: 'Caffeine (mg)', data: dailyData.map(d => Math.round(d.caffeine)), type: 'line', borderColor: '#92400E', backgroundColor: 'transparent', tension: 0.3, pointRadius: 3, borderWidth: 1.5, borderDash: [3, 2], yAxisID: 'y2', fill: false }
+    ];
+    if (drinksAlcohol) {
+      datasets.push({ label: 'Alcohol (drinks)', data: dailyData.map(d => Math.round(d.alcohol * 10) / 10), type: 'line', borderColor: '#DC2626', backgroundColor: 'transparent', tension: 0.3, pointRadius: 3, borderWidth: 1.5, borderDash: [3, 2], yAxisID: 'y2', fill: false });
+    }
 
     return {
       type: 'bar',
       data: {
         labels: days.map(d => { const dt = new Date(d + 'T12:00:00'); return `${dt.getDate()}/${dt.getMonth() + 1}`; }),
-        datasets: [
-          { label: 'Calories', data: dailyData.map(d => Math.round(d.calories)), type: 'line', borderColor: '#EF4444', backgroundColor: 'rgba(239,68,68,0.1)', tension: 0.3, pointRadius: 3, borderWidth: 2, yAxisID: 'y1', fill: false },
-          { label: 'Protein (g)', data: dailyData.map(d => Math.round(d.protein)), backgroundColor: 'rgba(16,185,129,0.6)', borderRadius: 3, yAxisID: 'y' },
-          { label: 'Carbs (g)', data: dailyData.map(d => Math.round(d.carbs)), backgroundColor: 'rgba(59,130,246,0.6)', borderRadius: 3, yAxisID: 'y' },
-          { label: 'Fat (g)', data: dailyData.map(d => Math.round(d.fat)), backgroundColor: 'rgba(245,158,11,0.6)', borderRadius: 3, yAxisID: 'y' }
-        ]
+        datasets
       },
       options: {
         ...this._defaultChartOptions(),
         scales: {
-          x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 0 } },
+          x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 0, maxTicksLimit: 7 } },
           y: { position: 'left', grid: { color: '#F3F4F6' }, title: { display: true, text: 'Macros (g)', font: { size: 10 } } },
-          y1: { position: 'right', grid: { display: false }, title: { display: true, text: 'Calories', font: { size: 10 } } }
+          y1: { position: 'right', grid: { display: false }, title: { display: true, text: 'Calories', font: { size: 10 } } },
+          y2: { display: false }
         },
-        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } }
+        plugins: { legend: this._consistentLegend() }
       }
     };
   },
 
   _buildMedChart(events) {
-    // Show last 14 days of medication adherence
     const medOnly = events.filter(e => e.eventType === 'medication');
-    const days = [];
-    for (let i = 13; i >= 0; i--) {
-      days.push(this._localDayStr(i));
-    }
+    const days = this._rangeDayLabels('medication');
 
     // Group meds by local date
     const medsByDay = {};
@@ -629,37 +713,36 @@ const Charts = {
             label: 'AM Taken',
             data: amTaken,
             backgroundColor: 'rgba(16,185,129,0.7)',
+            borderColor: '#10B981',
             borderRadius: 2, stack: 'am'
           },
           {
             label: 'AM Skipped',
             data: amSkipped,
             backgroundColor: 'rgba(239,68,68,0.7)',
+            borderColor: '#EF4444',
             borderRadius: 2, stack: 'am'
           },
           {
             label: 'PM Taken',
             data: pmTaken,
             backgroundColor: 'rgba(0,179,183,0.7)',
+            borderColor: '#00B3B7',
             borderRadius: 2, stack: 'pm'
           },
           {
             label: 'PM Skipped',
             data: pmSkipped,
             backgroundColor: 'rgba(245,158,11,0.8)',
+            borderColor: '#F59E0B',
             borderRadius: 2, stack: 'pm'
           }
         ]
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
+        ...this._defaultChartOptions(),
         plugins: {
-          legend: {
-            position: 'bottom',
-            labels: { boxWidth: 10, padding: 6, font: { size: 10 } }
-          },
+          legend: this._consistentLegend(),
           tooltip: {
             backgroundColor: '#1A1A2E',
             titleFont: { size: 12 },
@@ -680,7 +763,7 @@ const Charts = {
         scales: {
           x: {
             grid: { display: false },
-            ticks: { font: { size: 9 }, maxRotation: 45, minRotation: 45 },
+            ticks: { font: { size: 9 }, maxRotation: 45, minRotation: 45, maxTicksLimit: 10 },
             stacked: true
           },
           y: {
@@ -694,62 +777,124 @@ const Charts = {
     };
   },
 
-  /* ---------- Helpers ---------- */
-  _getDateRange(range) {
-    const end = new Date();
-    const start = new Date();
-    switch (range) {
-      case 'day': start.setDate(start.getDate() - 1); break;
-      case 'week': start.setDate(start.getDate() - 7); break;
-      case 'month': start.setMonth(start.getMonth() - 1); break;
-      case '3months': start.setMonth(start.getMonth() - 3); break;
-      case 'year': start.setFullYear(start.getFullYear() - 1); break;
-      case 'all': start.setFullYear(start.getFullYear() - 10); break;
-    }
-    return [start, end];
-  },
+  _buildVentolinChart(events) {
+    const ventOnly = events.filter(e => e.eventType === 'ventolin');
+    const days = this._rangeDayLabels('ventolin');
 
-  _generateLabels(range, dateRange) {
-    const [start, end] = dateRange;
-    const labels = [];
-    const d = new Date(start);
-    while (d <= end) {
-      labels.push(this._localDateKey(d.toISOString()));
-      d.setDate(d.getDate() + 1);
-    }
-    return labels;
-  },
-
-  _formatLabel(dateStr, range) {
-    const d = new Date(dateStr);
-    if (range === 'day') return d.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
-    if (range === 'week') return d.toLocaleDateString('en-AU', { weekday: 'short' });
-    return `${d.getDate()}/${d.getMonth() + 1}`;
-  },
-
-  _mapToLabels(events, labels, field, transform = null) {
-    // Group events by local date and average
-    const byDate = {};
-    events.forEach(e => {
-      const day = this._localDateKey(e.timestamp);
-      if (!byDate[day]) byDate[day] = [];
-      let val = e[field];
-      if (transform) val = transform(val);
-      if (val != null) byDate[day].push(val);
+    // Group by local date
+    const byDay = {};
+    ventOnly.forEach(e => {
+      const dk = this._localDateKey(e.timestamp);
+      if (!byDay[dk]) byDay[dk] = [];
+      byDay[dk].push(e);
     });
 
-    return labels.map(dateStr => {
-      const vals = byDate[dateStr];
-      if (!vals || vals.length === 0) return null;
-      // Sum for bars, average for lines
-      return Math.round(vals.reduce((a, b) => a + b) / vals.length * 10) / 10;
+    const preExData = [];
+    const reliefData = [];
+    // 7-day rolling total
+    const rollingTotal = [];
+
+    days.forEach((day, i) => {
+      const dayEvents = byDay[day] || [];
+      const pre = dayEvents.filter(e => (e.context || '').toLowerCase().startsWith('prevent')).length;
+      const react = dayEvents.length - pre;
+      preExData.push(pre);
+      reliefData.push(react);
+
+      // Rolling 7-day average
+      const start = Math.max(0, i - 6);
+      let sum = 0;
+      for (let j = start; j <= i; j++) {
+        const d = byDay[days[j]] || [];
+        sum += d.length;
+      }
+      const window = i - start + 1;
+      rollingTotal.push(window >= 7 ? +(sum / 7).toFixed(1) : null);
     });
+
+    const labels = days.map(d => {
+      const dt = new Date(d + 'T12:00:00');
+      return dt.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric' });
+    });
+
+    return {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Pre-Exercise',
+            data: preExData,
+            backgroundColor: 'rgba(59,130,246,0.7)',
+            borderColor: '#3B82F6',
+            borderRadius: 2,
+            stack: 'uses'
+          },
+          {
+            label: 'Symptom Relief',
+            data: reliefData,
+            backgroundColor: 'rgba(245,158,11,0.7)',
+            borderColor: '#F59E0B',
+            borderRadius: 2,
+            stack: 'uses'
+          },
+          {
+            label: '7-Day Avg',
+            type: 'line',
+            data: rollingTotal,
+            borderColor: '#EF4444',
+            borderWidth: 2,
+            borderDash: [4, 3],
+            pointRadius: 0,
+            fill: false,
+            tension: 0.3,
+            spanGaps: true,
+            order: 0
+          }
+        ]
+      },
+      options: {
+        ...this._defaultChartOptions(),
+        plugins: {
+          legend: this._consistentLegend(),
+          tooltip: {
+            backgroundColor: '#1A1A2E',
+            titleFont: { size: 12 },
+            bodyFont: { size: 11 },
+            callbacks: {
+              afterBody(items) {
+                const idx = items[0]?.dataIndex;
+                if (idx == null) return '';
+                const total = (preExData[idx] || 0) + (reliefData[idx] || 0);
+                if (total === 0) return '\nNo usage';
+                return `\nTotal: ${total} puff${total !== 1 ? 's' : ''}`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { font: { size: 9 }, maxRotation: 45, minRotation: 45, maxTicksLimit: 10 },
+            stacked: true
+          },
+          y: {
+            stacked: true,
+            grid: { color: '#F3F4F6' },
+            ticks: { font: { size: 10 }, stepSize: 1 },
+            title: { display: true, text: 'Uses', font: { size: 10 } },
+            beginAtZero: true
+          }
+        }
+      }
+    };
   },
 
   _defaultChartOptions() {
     return {
       responsive: true,
       maintainAspectRatio: false,
+      animation: false,
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { position: 'bottom', labels: { boxWidth: 12, padding: 8, font: { size: 11 } } },

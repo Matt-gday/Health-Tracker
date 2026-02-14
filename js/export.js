@@ -5,89 +5,169 @@
 
 const Export = {
 
-  /* ---------- CSV Export ---------- */
-  async generateCSV() {
-    const events = await DB.getAllEvents(null, 10000);
-    if (events.length === 0) {
-      UI.showToast('No data to export', 'info');
+  /* ---------- CSV Export for AI Analysis ---------- */
+  _csv(val) {
+    if (val == null || val === '') return '""';
+    const s = String(val).replace(/"/g, '""');
+    return `"${s}"`;
+  },
+
+  async generateCSV(useDemo = false) {
+    if (useDemo && !Demo.isActive) {
+      UI.showToast('Turn on Demo first', 'info');
       return;
     }
+    const events = useDemo ? Demo.getEvents() : await DB.getAllEvents(null, 10000);
+    const meds = useDemo ? Demo.getMedications() : await DB.getMedications();
 
+    // Profile data — always include for AI context (age, BMI, meds)
+    const userName = await DB.getSetting('userName') || '';
+    const userDOB = await DB.getSetting('userDOB') || '';
+    const userGender = await DB.getSetting('userGender') || '';
+    const userHeight = await DB.getSetting('userHeight') || '';
+    const goalWeight = await DB.getSetting('goalWeight') || '';
+    const drinksAlcohol = await DB.getSetting('drinksAlcohol') || 'no';
+    const medList = meds.map(m => `${m.name} (${m.dosage}, ${m.schedule})`).join('; ');
+
+    const heightCm = userHeight ? parseInt(userHeight, 10) : null;
+
+    // Pre-fetch for dynamic BP context
+    const allMedEvents = events.filter(e => e.eventType === 'medication');
+    const allWalkEvents = events.filter(e => e.eventType === 'walk');
+    const allFoodDrinkEvents = events.filter(e => e.eventType === 'food' || e.eventType === 'drink');
+
+    // Semantic headers — AI-friendly column names
     const headers = [
-      'timestamp', 'eventType', 'value1', 'value2', 'value3', 'value4', 'value5',
-      'name', 'quantity', 'context1', 'context2', 'isDuringAFib',
-      'duration_min', 'notes', 'wasEdited'
+      'timestamp', 'eventType',
+      'systolic_mmHg', 'diastolic_mmHg', 'heart_rate_bpm',
+      'weight_kg', 'bmi',
+      'steps',
+      'item_name', 'quantity', 'volume_ml', 'calories_kcal', 'protein_g', 'carbs_g', 'fat_g', 'sodium_mg', 'caffeine_mg', 'alcohol_units',
+      'med_name', 'med_dosage', 'med_status', 'med_time_of_day',
+      'start_time', 'end_time', 'duration_min', 'onset_context', 'onset_notes', 'afib_episode_start_time',
+      'symptoms', 'stress_level', 'ventolin_context',
+      'bp_med_context', 'bp_mins_since_meds', 'bp_category', 'bp_walk_context', 'bp_food_context', 'bp_caffeine_context',
+      'is_during_afib', 'notes', 'was_edited'
     ];
 
     const rows = events.map(e => {
-      let value1 = '', value2 = '', value3 = '', value4 = '', value5 = '';
-      let name = '', quantity = '', context1 = '', context2 = '';
+      const obj = {
+        timestamp: e.timestamp || '',
+        eventType: e.eventType || '',
+        systolic_mmHg: '', diastolic_mmHg: '', heart_rate_bpm: '',
+        weight_kg: '', bmi: '',
+        steps: '',
+        item_name: '', quantity: '', volume_ml: '', calories_kcal: '', protein_g: '', carbs_g: '', fat_g: '', sodium_mg: '', caffeine_mg: '', alcohol_units: '',
+        med_name: '', med_dosage: '', med_status: '', med_time_of_day: '',
+        start_time: '', end_time: '', duration_min: '', onset_context: '', onset_notes: '', afib_episode_start_time: '',
+        symptoms: '', stress_level: '', ventolin_context: '',
+        bp_med_context: '', bp_mins_since_meds: '', bp_category: '', bp_walk_context: '', bp_food_context: '', bp_caffeine_context: '',
+        is_during_afib: e.isDuringAFib ? 'true' : 'false',
+        notes: (e.notes || '').replace(/"/g, '""'),
+        was_edited: e.lastEdited ? 'true' : 'false'
+      };
 
       switch (e.eventType) {
         case 'bp_hr':
-          value1 = e.systolic || '';
-          value2 = e.diastolic || '';
-          value3 = e.heartRate || '';
-          context1 = e.exerciseContext || '';
-          context2 = e.foodContext || '';
+          obj.systolic_mmHg = e.systolic || '';
+          obj.diastolic_mmHg = e.diastolic || '';
+          obj.heart_rate_bpm = e.heartRate || '';
+          const mc = App.computeMedContext(e.timestamp, allMedEvents);
+          if (mc) {
+            obj.bp_med_context = mc.context || '';
+            obj.bp_mins_since_meds = mc.minsSinceMeds != null ? mc.minsSinceMeds : '';
+          }
+          const wc = App.computeWalkContext(e.timestamp, allWalkEvents);
+          if (wc) obj.bp_walk_context = wc.label;
+          const fc = App.computeFoodContext(e.timestamp, allFoodDrinkEvents);
+          if (fc) obj.bp_food_context = fc.label;
+          const cc = App.computeCaffeineContext(e.timestamp, allFoodDrinkEvents);
+          if (cc) obj.bp_caffeine_context = cc.label;
+          obj.bp_category = App.classifyBpReading(e, allWalkEvents);
           break;
         case 'weight':
-          value1 = e.weight_kg || '';
+          obj.weight_kg = e.weight_kg || '';
+          if (heightCm && heightCm > 0 && e.weight_kg) {
+            obj.bmi = Math.round((e.weight_kg / Math.pow(heightCm / 100, 2)) * 10) / 10;
+          }
           break;
         case 'steps':
-          value1 = e.steps || '';
+          obj.steps = e.steps || e.step_count || '';
           break;
         case 'food':
-          value1 = e.protein_g || '';
-          value2 = e.carbs_g || '';
-          value3 = e.fat_g || '';
-          value4 = e.sodium_mg || '';
-          name = e.foodName || '';
-          quantity = e.quantity || '';
+          obj.item_name = e.foodName || '';
+          obj.quantity = e.quantity || '';
+          obj.calories_kcal = e.calories || '';
+          obj.protein_g = e.protein_g || '';
+          obj.carbs_g = e.carbs_g || '';
+          obj.fat_g = e.fat_g || '';
+          obj.sodium_mg = e.sodium_mg || '';
           break;
         case 'drink':
-          value1 = e.volume_ml || '';
-          value2 = e.protein_g || '';
-          value3 = e.carbs_g || '';
-          value4 = e.sodium_mg || '';
-          value5 = e.caffeine_mg || '';
-          name = e.drinkName || '';
-          quantity = e.volume_ml || '';
+          obj.item_name = e.drinkName || '';
+          obj.volume_ml = e.volume_ml || '';
+          obj.calories_kcal = e.calories || '';
+          obj.protein_g = e.protein_g || '';
+          obj.carbs_g = e.carbs_g || '';
+          obj.fat_g = e.fat_g || '';
+          obj.sodium_mg = e.sodium_mg || '';
+          obj.caffeine_mg = e.caffeine_mg || '';
+          obj.alcohol_units = e.alcohol_units || '';
           break;
         case 'medication':
-          name = e.medName || '';
-          quantity = e.dosage || '';
-          context1 = e.status || '';
-          context2 = e.timeOfDay || '';
+          obj.med_name = e.medName || '';
+          obj.med_dosage = e.dosage || '';
+          obj.med_status = e.status || '';
+          obj.med_time_of_day = e.timeOfDay || '';
           break;
         case 'ventolin':
-          context1 = e.context || '';
+          obj.ventolin_context = e.context || '';
           break;
         case 'afib':
         case 'sleep':
         case 'walk':
-          // Start and end as separate conceptual entries
+          obj.start_time = e.startTime || '';
+          obj.end_time = e.endTime || '';
+          obj.duration_min = e.duration_min || '';
+          obj.onset_context = Array.isArray(e.onsetContext) ? e.onsetContext.join('; ') : (e.onsetContext || '');
+          obj.onset_notes = e.onsetNotes || '';
+          break;
+        case 'afib_symptom':
+          obj.afib_episode_start_time = e.afibStartTime || '';
+          obj.symptoms = Array.isArray(e.symptoms) ? e.symptoms.join('; ') : (e.symptoms || '');
+          break;
+        case 'stress':
+          obj.stress_level = e.level || '';
           break;
       }
 
-      return [
-        e.timestamp || '',
-        e.eventType || '',
-        value1, value2, value3, value4, value5,
-        name, quantity, context1, context2,
-        e.isDuringAFib ? 'true' : 'false',
-        e.duration_min || '',
-        (e.notes || '').replace(/"/g, '""'),
-        e.lastEdited ? 'true' : 'false'
-      ];
+      return headers.map(h => obj[h] ?? '');
     });
 
+    // Build CSV: profile comment block + events
+    const profileLines = [
+      '# Heart & Health Tracker — Export for AI Analysis',
+      `# Generated: ${new Date().toISOString().slice(0, 10)}`,
+      '# timezone=Australia/Brisbane (UTC+10, no DST)',
+      '# PROFILE (use for age, BMI context, medication list):',
+      `# name=${userName}`,
+      `# dob=${userDOB}`,
+      `# gender=${userGender}`,
+      `# height_cm=${userHeight}`,
+      `# goal_weight_kg=${goalWeight}`,
+      `# drinks_alcohol=${drinksAlcohol}`,
+      `# medications=${medList.replace(/"/g, '""')}`,
+      '#',
+      '# EVENTS (one row per logged entry):'
+    ];
+
     const csvContent = [
-      headers.join(','),
-      ...rows.map(r => r.map(v => `"${v}"`).join(','))
+      profileLines.join('\n'),
+      headers.map(h => this._csv(h)).join(','),
+      ...rows.map(r => r.map(v => this._csv(v)).join(','))
     ].join('\n');
 
-    this._download(csvContent, `heart-tracker-${UI.todayStr()}.csv`, 'text/csv');
+    this._download(csvContent, `heart-tracker-${useDemo ? 'demo-' : ''}${UI.todayStr()}.csv`, 'text/csv');
   },
 
   /* ---------- PDF Export ---------- */

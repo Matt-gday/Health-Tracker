@@ -47,8 +47,8 @@ const UI = {
     const d = dia || 0;
     if (s > 180 || d > 120) return { label: 'Crisis',   color: '#991B1B', bg: '#FEE2E2' };
     if (s >= 140 || d >= 90) return { label: 'High',     color: '#DC2626', bg: '#FEE2E2' };
-    if (s >= 130 || d >= 80) return { label: 'Elevated', color: '#EC4899', bg: '#FCE7F3' };
-    if (s >= 120 && d < 80)  return { label: 'Elevated', color: '#EC4899', bg: '#FCE7F3' };
+    if (s >= 130 || d >= 80) return { label: 'Elev', color: '#EC4899', bg: '#FCE7F3' };
+    if (s >= 120 && d < 80)  return { label: 'Elev', color: '#EC4899', bg: '#FCE7F3' };
     if (s < 90 || d < 60)    return { label: 'Low',      color: '#3B82F6', bg: '#DBEAFE' };
     return                           { label: 'Normal',   color: '#10B981', bg: '#D1FAE5' };
   },
@@ -92,8 +92,17 @@ const UI = {
     setTimeout(() => toast.remove(), 3000);
   },
 
+  showFieldHint(text) {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = 'toast toast-info toast-hint';
+    toast.innerHTML = `<span>${text}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), 4000);
+  },
+
   /* ---------- Confirm Dialog ---------- */
-  confirm(title, message) {
+  confirm(title, message, okLabel = 'Delete') {
     return new Promise((resolve) => {
       const overlay = document.createElement('div');
       overlay.className = 'confirm-overlay';
@@ -103,7 +112,7 @@ const UI = {
           <p>${message}</p>
           <div class="confirm-actions">
             <button class="btn btn-secondary" id="confirm-cancel">Cancel</button>
-            <button class="btn btn-danger" id="confirm-ok">Delete</button>
+            <button class="btn btn-danger" id="confirm-ok">${okLabel}</button>
           </div>
         </div>`;
       document.body.appendChild(overlay);
@@ -166,19 +175,22 @@ const UI = {
     // AFib
     if (s.afib.active) {
       const dur = s.afib.activeDuration;
-      items.push({ icon: 'heart', label: 'AFib', value: `● Active · ${dur >= 60 ? Math.floor(dur / 60) + 'h ' + (dur % 60) + 'm' : dur + 'm'}`, cls: 'stat-afib', filter: 'afib' });
+      items.push({ icon: 'heart', label: 'AFib', value: `● Active · ${dur >= 60 ? Math.floor(dur / 60) + 'h ' + (dur % 60) + 'm' : dur + 'm'} <button class="afib-symptom-btn" onclick="event.stopPropagation();App.openSymptomLog()">Log Symptoms</button>`, cls: 'stat-afib', filter: 'afib' });
     } else if (s.afib.count > 0) {
       items.push({ icon: 'heart', label: 'AFib', value: `${s.afib.count} event${s.afib.count > 1 ? 's' : ''}`, cls: 'stat-afib', filter: 'afib' });
     }
 
     // BP/HR - show ALL readings stacked, earliest first
     if (s.bp.count > 0 && s.bp.readings) {
+      const dayMeds = s.meds?.events || [];
       const bpLines = s.bp.readings.map(r => {
         const cat = this.bpCategory(r.systolic, r.diastolic);
         const tag = cat.label ? ` <span style="color:${cat.color};font-weight:600;font-size:var(--font-xs)">${cat.label}</span>` : '';
-        const ctx = r.medContext ? ` · ${r.medContext}` : '';
+        const mc = App.computeMedContext(r.timestamp, dayMeds);
+        const shortLabel = mc ? mc.label.replace('Post-Meds', 'Post-M').replace('Pre-Meds', 'Pre-M') : '';
+        const ctx = shortLabel ? ` · <span style="font-size:var(--font-xs)">${shortLabel}</span>` : '';
         const time = new Date(r.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        return `${r.systolic || '—'}/${r.diastolic || '—'} · ${r.heartRate || '—'} bpm${ctx}${tag} <span style="color:var(--text-tertiary);font-size:var(--font-xs)">${time}</span>`;
+        return `${r.systolic || '—'}/${r.diastolic || '—'} · ${r.heartRate || '—'} bpm${ctx}${tag} <span style="color:var(--text-tertiary);font-size:var(--font-xs);white-space:nowrap">${time}</span>`;
       });
       items.push({ icon: 'activity', label: 'BP / HR', value: bpLines[0], valueSub: bpLines.length > 1 ? bpLines.slice(1).join('<br>') : '', cls: '', filter: 'bp_hr' });
     } else if (s.bp.count > 0) {
@@ -199,7 +211,13 @@ const UI = {
 
     // Weight
     if (s.weight.latest) {
-      items.push({ icon: 'weight', label: 'Weight', value: `${s.weight.latest} kg`, cls: '', filter: 'weight' });
+      let weightVal = `${s.weight.latest} kg`;
+      const heightCm = s.userHeight ? parseInt(s.userHeight, 10) : null;
+      if (heightCm && heightCm > 0) {
+        const bmi = Math.round((s.weight.latest / Math.pow(heightCm / 100, 2)) * 10) / 10;
+        weightVal += ` · BMI ${bmi}`;
+      }
+      items.push({ icon: 'weight', label: 'Weight', value: weightVal, cls: '', filter: 'weight' });
     }
 
     // Walk
@@ -237,9 +255,11 @@ const UI = {
       if (hasDrink) line2Parts.push(`💧 ${s.drink.totalMl.toLocaleString()} mL`);
       if (totalSodium > 0) line2Parts.push(`🧂 ${totalSodium} mg`);
       if (totalCaffeine > 0) line2Parts.push(`☕ ${totalCaffeine} mg`);
+      if (s.drinksAlcohol && (s.drink.alcohol || 0) > 0) line2Parts.push(`🍷 ${s.drink.alcohol}`);
       const line2 = line2Parts.join('  ');
-      const nutVal = line1 || 'Logged';
-      const nutSub = line2 || '';
+      // If no macros/cals, promote fluid line to main value
+      const nutVal = line1 || line2 || '';
+      const nutSub = line1 ? line2 : '';
       items.push({ icon: 'utensils', label: 'Nutrition', value: nutVal, valueSub: nutSub, cls: '', filter: 'nutrition', isDetail: true });
     }
 
@@ -272,7 +292,8 @@ const UI = {
   },
 
   /* ---------- History Feed ---------- */
-  renderHistory(events, activeFilters) {
+  renderHistory(events, activeFilters, drinksAlcohol = false) {
+    this._drinksAlcohol = drinksAlcohol;
     const filterContainer = document.getElementById('history-filters');
     const listContainer = document.getElementById('history-list');
 
@@ -329,15 +350,51 @@ const UI = {
       const singleFilter = activeFilters.length === 1 && activeFilters[0] !== 'all' ? activeFilters[0] : null;
       html += `<div class="section-header">
         <h2>${dateLabel}</h2>
-        ${singleFilter ? `<button class="view-detail-link" onclick="App.openDetail('${singleFilter}')">View Details →</button>` : ''}
+        ${singleFilter && idx === 0 ? `<button class="view-detail-link" onclick="App.openDetail('${singleFilter}')">Stats & Trends →</button>` : ''}
       </div>`;
+      // Collect day's med events for dynamic BP med-context
+      const dayMeds = grouped[dateKey].filter(e => e.eventType === 'medication');
       grouped[dateKey].forEach(event => {
+        if (event.eventType === 'bp_hr') {
+          event._medCtx = App.computeMedContext(event.timestamp, dayMeds);
+        }
         html += this._renderEventItem(event);
       });
     });
 
     listContainer.innerHTML = html;
     lucide.createIcons();
+
+    // Scroll-to-top button: show when filter pills scroll off screen
+    this._setupScrollToTop();
+  },
+
+  _setupScrollToTop() {
+    const filters = document.getElementById('history-filters');
+    const page = document.querySelector('#page-history .page-content');
+    if (!filters || !page) return;
+
+    // Create button if it doesn't exist
+    let btn = document.getElementById('scroll-top-btn');
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.id = 'scroll-top-btn';
+      btn.className = 'scroll-top-btn';
+      btn.innerHTML = '<i data-lucide="chevron-up"></i>';
+      btn.onclick = () => page.scrollTo({ top: 0, behavior: 'smooth' });
+      page.appendChild(btn);
+      lucide.createIcons({ nameAttr: 'data-lucide', attrs: {}, icons: {} });
+    }
+
+    // Use IntersectionObserver on the filter chips
+    if (this._scrollTopObserver) this._scrollTopObserver.disconnect();
+    this._scrollTopObserver = new IntersectionObserver(
+      ([entry]) => {
+        btn.classList.toggle('visible', !entry.isIntersecting);
+      },
+      { root: page, threshold: 0 }
+    );
+    this._scrollTopObserver.observe(filters);
   },
 
   _friendlyDate(dateStr) {
@@ -382,17 +439,21 @@ const UI = {
 
   _eventConfig(event) {
     switch (event.eventType) {
-      case 'afib':
+      case 'afib': {
+        const durStr = event.endTime ? `Duration: ${this.formatDuration(event.duration_min)}` : 'In progress...';
+        const onsetStr = event.onsetContext && event.onsetContext.length > 0 ? ` · ${event.onsetContext.join(', ')}` : '';
         return {
           icon: 'heart', iconClass: 'afib',
           title: event.endTime ? 'AFib Episode' : 'AFib Started',
-          subtitle: event.endTime ? `Duration: ${this.formatDuration(event.duration_min)}` : 'In progress...'
+          subtitle: durStr + onsetStr
         };
+      }
       case 'bp_hr': {
         const bpParts = [];
         if (event.systolic || event.diastolic) bpParts.push(`${event.systolic || '—'}/${event.diastolic || '—'} mmHg`);
         if (event.heartRate) bpParts.push(`${event.heartRate} BPM`);
-        if (event.medContext) bpParts.push(event.medContext);
+        if (event._medCtx) bpParts.push(event._medCtx.label);
+        else if (event.medContext) bpParts.push(event.medContext); // legacy fallback
         const cat = this.bpCategory(event.systolic, event.diastolic);
         return {
           icon: 'activity', iconClass: 'bp',
@@ -435,7 +496,7 @@ const UI = {
         return {
           icon: 'droplets', iconClass: 'drink',
           title: event.drinkName || 'Drink',
-          subtitle: `${event.volume_ml || 0} mL${event.calories ? ' · ' + event.calories + ' kcal' : ''}${event.caffeine_mg ? '  ☕ ' + event.caffeine_mg + 'mg' : ''}`
+          subtitle: `${event.volume_ml || 0} mL${event.calories ? ' · ' + event.calories + ' kcal' : ''}${event.caffeine_mg ? '  ☕ ' + event.caffeine_mg + 'mg' : ''}${(this._drinksAlcohol && event.alcohol_units) ? '  🍷 ' + event.alcohol_units : ''}`
         };
       case 'medication':
         return {
@@ -449,17 +510,33 @@ const UI = {
           title: 'Ventolin',
           subtitle: event.context === 'Preventive' ? 'Preventive' : 'Reactive'
         };
+      case 'afib_symptom':
+        return {
+          icon: 'heart-pulse', iconClass: 'afib',
+          title: 'AFib Symptoms',
+          subtitle: (event.symptoms || []).join(', ') || event.notes || ''
+        };
+      case 'stress':
+        return {
+          icon: 'brain', iconClass: 'stress',
+          title: 'Stress Level',
+          subtitle: `Level ${event.level}/5`
+        };
       default:
         return { icon: 'circle', iconClass: '', title: event.eventType, subtitle: '' };
     }
   },
 
   /* ---------- Modal Helpers ---------- */
-  openModal(title, bodyHtml, footerHtml) {
+  openModal(title, bodyHtml, footerHtml, hideCloseButton = false) {
     document.getElementById('modal-title').textContent = title;
-    document.getElementById('modal-body').innerHTML = bodyHtml;
+    const body = document.getElementById('modal-body');
+    body.innerHTML = bodyHtml;
     document.getElementById('modal-footer').innerHTML = footerHtml || '';
+    const closeBtn = document.getElementById('modal-close-btn');
+    if (closeBtn) closeBtn.style.display = hideCloseButton ? 'none' : '';
     document.getElementById('modal-overlay').classList.add('active');
+    requestAnimationFrame(() => { body.scrollTop = 0; });
     lucide.createIcons();
   },
 
@@ -469,8 +546,11 @@ const UI = {
 
   openFullscreenModal(title, bodyHtml, onSave) {
     document.getElementById('fullscreen-modal-title').textContent = title;
-    document.getElementById('fullscreen-modal-body').innerHTML = bodyHtml;
+    const body = document.getElementById('fullscreen-modal-body');
+    body.innerHTML = bodyHtml;
     document.getElementById('modal-fullscreen').classList.add('active');
+    // Scroll to top after DOM update
+    requestAnimationFrame(() => { body.scrollTop = 0; });
     // Hide Save button when there's no save handler (list views)
     const saveBtn = document.getElementById('fullscreen-save-btn');
     if (saveBtn) saveBtn.style.display = onSave ? '' : 'none';
@@ -500,20 +580,6 @@ const UI = {
         <div class="form-group">
           <label>Heart Rate</label>
           <input type="number" class="form-input form-input-large" id="bp-hr" placeholder="—" value="${data.heartRate || ''}" inputmode="numeric">
-        </div>
-      </div>
-      <div class="form-group">
-        <label>Exercise Context</label>
-        <div class="toggle-group" id="bp-exercise-ctx">
-          <button class="toggle-option${data.exerciseContext === 'Before Exercise' ? ' active' : ''}" data-value="Before Exercise">Before Exercise</button>
-          <button class="toggle-option${data.exerciseContext === 'After Exercise' ? ' active' : ''}" data-value="After Exercise">After Exercise</button>
-        </div>
-      </div>
-      <div class="form-group">
-        <label>Food Context</label>
-        <div class="toggle-group" id="bp-food-ctx">
-          <button class="toggle-option${data.foodContext === 'Before Food' ? ' active' : ''}" data-value="Before Food">Before Food</button>
-          <button class="toggle-option${data.foodContext === 'After Food' ? ' active' : ''}" data-value="After Food">After Food</button>
         </div>
       </div>
       <div class="form-group">
@@ -633,7 +699,7 @@ const UI = {
   },
 
   /* ---------- Drink Entry Form ---------- */
-  buildDrinkEntryForm(existingData = null) {
+  buildDrinkEntryForm(existingData = null, drinksAlcohol = false) {
     const data = existingData || {};
     const ts = data.timestamp ? this.localISOString(new Date(data.timestamp)) : this.localISOString();
     return `
@@ -684,6 +750,11 @@ const UI = {
           <input type="number" step="1" class="form-input" id="drink-sodium" placeholder="0" value="${data.sodium_mg || ''}" inputmode="numeric">
         </div>
       </div>
+      ${drinksAlcohol ? `
+      <div class="form-group">
+        <label>Alcohol (std drinks)</label>
+        <input type="number" step="0.5" class="form-input" id="drink-alcohol" placeholder="0" value="${data.alcohol_units || ''}" inputmode="decimal">
+      </div>` : ''}
       <div class="form-group">
         <label>Date & Time</label>
         <input type="datetime-local" class="form-input" id="drink-timestamp" value="${ts}">
@@ -724,6 +795,16 @@ const UI = {
           <button class="btn btn-secondary btn-sm" style="flex:1" onclick="App.logVentolin('Reactive')">
             <i data-lucide="alert-circle"></i> Reactive
           </button>
+        </div>
+      </div>
+      <div class="stress-section">
+        <h3>Stress Level</h3>
+        <p style="font-size:var(--font-xs);color:var(--text-tertiary);margin:4px 0 8px">${timeOfDay === 'Morning' ? 'How stressed are you this morning?' : 'How stressed have you been today?'}</p>
+        <div class="stress-dots" id="stress-dots">
+          ${[1,2,3,4,5].map(n => `<button class="stress-dot" data-level="${n}" onclick="App.selectStress(${n})">${n}</button>`).join('')}
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-tertiary);margin-top:2px;padding:0 4px">
+          <span>Calm</span><span>Very Stressed</span>
         </div>
       </div>`;
   },
@@ -795,6 +876,16 @@ const UI = {
         <label>Duration</label>
         <p style="font-size:var(--font-lg);font-weight:600">${this.formatDurationLong(event.duration_min)}</p>
       </div>` : ''}
+      ${event.eventType === 'afib' ? (() => {
+        const onsetOptions = ['Resting', 'Sleeping', 'Eating', 'Exercising', 'Stressed', 'Bending Over', 'Just Woke Up', 'Other'];
+        const checked = event.onsetContext || [];
+        return `<div class="form-group">
+          <label>What were you doing?</label>
+          <div class="onset-ctx-grid">
+            ${onsetOptions.map(opt => `<label class="onset-ctx-option"><input type="checkbox" value="${opt}" ${checked.includes(opt) ? 'checked' : ''}><span>${opt}</span></label>`).join('')}
+          </div>
+        </div>`;
+      })() : ''}
       <div class="form-group">
         <label>Notes</label>
         <textarea class="form-input" id="toggle-notes" placeholder="Optional notes...">${event.notes || ''}</textarea>
@@ -874,7 +965,7 @@ const UI = {
         <div class="settings-section-title">Profile</div>
         <div class="settings-list">
           <div class="settings-item" onclick="App.openSettingsPage('userInfo')">
-            <div class="settings-label"><i data-lucide="user"></i><span>User Information</span></div>
+            <div class="settings-label"><i data-lucide="user"></i><span>Personal Information</span></div>
             <i data-lucide="chevron-right" class="chevron"></i>
           </div>
           <div class="settings-item" onclick="App.openSettingsPage('goals')">
@@ -918,91 +1009,163 @@ const UI = {
           </div>
         </div>
       </div>
+      <div class="settings-section settings-danger">
+        <div class="settings-section-title">Danger Zone</div>
+        <div class="settings-list">
+          <div class="settings-item settings-item-danger" onclick="App.confirmDeleteAllData()">
+            <div class="settings-label"><i data-lucide="trash-2"></i><span>Delete All Data</span></div>
+            <i data-lucide="chevron-right" class="chevron"></i>
+          </div>
+        </div>
+      </div>
       <p style="text-align:center;color:var(--text-tertiary);font-size:var(--font-xs);padding:var(--space-lg);">
-        Heart & Health Tracker v1.0.0<br>Made with care for Matt Allan
+        Heart & Health Tracker v${App.APP_VERSION}<br>Made with care for Matt Allan
       </p>`;
     lucide.createIcons();
   },
 
-  /* ---------- Dashboard Page ---------- */
-  renderDashboard(chartData) {
-    const content = document.getElementById('dashboard-content');
-    content.innerHTML = `
-      <div class="time-range-selector" id="dashboard-range">
-        <button class="time-range-btn" onclick="App.setDashboardRange('day')">Day</button>
-        <button class="time-range-btn active" onclick="App.setDashboardRange('week')">Week</button>
-        <button class="time-range-btn" onclick="App.setDashboardRange('month')">Month</button>
-        <button class="time-range-btn" onclick="App.setDashboardRange('3months')">3M</button>
-        <button class="time-range-btn" onclick="App.setDashboardRange('year')">Year</button>
-        <button class="time-range-btn" onclick="App.setDashboardRange('all')">All</button>
+  /* ---------- AFib Insights Page (rendered by App.renderAfibInsights) ---------- */
+
+  /* ---------- Detail Page Stat Helpers ---------- */
+  _buildStatCardHtml(s) {
+    const colorStyle = s.color ? ` style="color:${s.color}"` : '';
+    const bColor = s.badgeColor || s.color || '';
+    const badge = s.badge ? `<span class="bp-badge" style="background:${s.bg || 'transparent'};color:${bColor};font-size:var(--font-xs);margin-left:4px">${s.badge}</span>` : '';
+    const clickAttr = s.clickable && s.onclick ? ` onclick="${s.onclick}" style="cursor:pointer"` : '';
+    const clickHint = s.clickable ? ' <span style="font-size:var(--font-xs);opacity:0.6">tap to view</span>' : '';
+    return `<div class="stat-card"${clickAttr}><div class="stat-label">${s.label}</div><div class="stat-value"${colorStyle}>${s.value} <span class="stat-unit">${s.unit || ''}</span>${badge}${clickHint}</div></div>`;
+  },
+
+  _buildStatsHtml(stats) {
+    if (!stats || stats.length === 0) return '';
+    let html = '<div class="stats-grid" id="stats-grid">';
+    stats.forEach(s => { html += this._buildStatCardHtml(s); });
+    html += '</div>';
+    // Monthly summary (for afib, ventolin)
+    if (stats._monthlySummary) {
+      html += this._buildMonthlySummaryHtml(stats._monthlySummary);
+    }
+    return html;
+  },
+
+  _buildMonthlySummaryHtml(m) {
+    const badge = m.badge && m.badge.badge
+      ? `<span class="monthly-badge" style="background:${m.badge.bg || 'transparent'};color:${m.badge.badgeColor || ''}">${m.badge.badge}</span>`
+      : '';
+    const rightBold = m.rightIsCurrent ? ' monthly-current' : '';
+    const disableRight = m.monthOffset === 0 ? ' disabled' : '';
+    return `<div class="monthly-summary" id="monthly-summary">
+      <div class="monthly-header">
+        <button class="month-arrow" onclick="App.shiftMonth(1)">‹</button>
+        <span class="monthly-summary-title">Monthly Comparison</span>
+        <button class="month-arrow"${disableRight} onclick="App.shiftMonth(-1)">›</button>
       </div>
-      <div class="chart-container" id="dashboard-chart-container">
-        <canvas id="dashboard-chart"></canvas>
-      </div>
-      <div style="padding:0 var(--space-md) var(--space-sm);">
-        <p style="font-size:var(--font-xs);color:var(--text-tertiary);">Toggle data layers (max 3-4 recommended):</p>
-      </div>
-      <div class="dashboard-chips" id="dashboard-chips">
-        <button class="filter-chip" data-layer="afib" onclick="App.toggleDashboardLayer('afib')">AFib</button>
-        <button class="filter-chip" data-layer="bp" onclick="App.toggleDashboardLayer('bp')">BP</button>
-        <button class="filter-chip" data-layer="hr" onclick="App.toggleDashboardLayer('hr')">Heart Rate</button>
-        <button class="filter-chip" data-layer="sleep" onclick="App.toggleDashboardLayer('sleep')">Sleep</button>
-        <button class="filter-chip" data-layer="weight" onclick="App.toggleDashboardLayer('weight')">Weight</button>
-        <button class="filter-chip" data-layer="walk" onclick="App.toggleDashboardLayer('walk')">Walk</button>
-        <button class="filter-chip" data-layer="steps" onclick="App.toggleDashboardLayer('steps')">Steps</button>
-        <button class="filter-chip" data-layer="food" onclick="App.toggleDashboardLayer('food')">Food</button>
-        <button class="filter-chip" data-layer="drink" onclick="App.toggleDashboardLayer('drink')">Drink</button>
-        <button class="filter-chip" data-layer="medication" onclick="App.toggleDashboardLayer('medication')">Meds</button>
-        <button class="filter-chip" data-layer="ventolin" onclick="App.toggleDashboardLayer('ventolin')">Ventolin</button>
-      </div>
-      <div style="padding:var(--space-sm) var(--space-md);">
-        <p style="font-size:var(--font-xs);color:var(--text-tertiary);font-weight:600;">Quick Presets:</p>
-        <div style="display:flex;gap:var(--space-sm);margin-top:var(--space-sm);flex-wrap:wrap;">
-          <button class="btn btn-secondary btn-sm" style="flex:0 0 auto" onclick="App.setDashboardPreset('afib')">AFib Analysis</button>
-          <button class="btn btn-secondary btn-sm" style="flex:0 0 auto" onclick="App.setDashboardPreset('weight')">Weight Journey</button>
-          <button class="btn btn-secondary btn-sm" style="flex:0 0 auto" onclick="App.setDashboardPreset('heart')">Heart Health</button>
+      <div class="monthly-row">
+        <div class="monthly-cell">
+          <div class="monthly-label">${m.leftLabel}</div>
+          <div class="monthly-value">${m.leftCount}</div>
+          ${m.leftDetail ? `<div class="monthly-detail">${m.leftDetail}</div>` : ''}
+          ${m.leftDur ? `<div class="monthly-detail">${m.leftDur} total</div>` : ''}
         </div>
-      </div>`;
-    lucide.createIcons();
+        <div class="monthly-divider"></div>
+        <div class="monthly-cell">
+          <div class="monthly-label${rightBold}">${m.rightLabel}</div>
+          <div class="monthly-value">${m.rightCount} ${badge}</div>
+          ${m.rightDetail ? `<div class="monthly-detail">${m.rightDetail}</div>` : ''}
+          ${m.rightDur ? `<div class="monthly-detail">${m.rightDur} total</div>` : ''}
+        </div>
+      </div>
+    </div>`;
+  },
+
+  updateWeekStats(stats, weekRange, weekOffset) {
+    const label = document.getElementById('week-range-label');
+    if (label) label.textContent = weekRange.label;
+    const rightArrow = document.getElementById('week-arrow-right');
+    if (rightArrow) rightArrow.disabled = weekOffset === 0;
+    const grid = document.getElementById('stats-grid');
+    if (grid) {
+      let html = '';
+      stats.forEach(s => { html += this._buildStatCardHtml(s); });
+      grid.innerHTML = html;
+    }
+    // Update monthly summary if present
+    const monthEl = document.getElementById('monthly-summary');
+    if (stats._monthlySummary) {
+      if (monthEl) {
+        monthEl.outerHTML = this._buildMonthlySummaryHtml(stats._monthlySummary);
+      }
+    } else if (monthEl) {
+      monthEl.remove();
+    }
   },
 
   /* ---------- Detail Page Builder ---------- */
-  renderDetailPage(type, stats, events) {
+  renderDetailPage(type, stats, events, weekRange = null, weekOffset = 0, drinksAlcohol = false) {
+    this._drinksAlcohol = drinksAlcohol;
     const content = document.getElementById('detail-content');
     const titleEl = document.getElementById('detail-title');
     const titles = {
       afib: 'AFib', bp_hr: 'Blood Pressure / HR', sleep: 'Sleep',
       weight: 'Weight', activity: 'Activity', food: 'Food',
-      drink: 'Drinks', nutrition: 'Nutrition', medication: 'Medication'
+      drink: 'Drinks', nutrition: 'Nutrition', medication: 'Medication',
+      ventolin: 'Ventolin'
     };
     titleEl.textContent = titles[type] || type;
 
     let html = '';
 
-    // Stats section
-    if (stats && stats.length > 0) {
-      html += '<div class="stats-grid">';
-      stats.forEach(s => {
-        const colorStyle = s.color ? ` style="color:${s.color}"` : '';
-        const badge = s.badge ? `<span class="bp-badge" style="background:${s.bg || 'transparent'};color:${s.color};font-size:var(--font-xs);margin-left:4px">${s.badge}</span>` : '';
-        html += `<div class="stat-card"><div class="stat-label">${s.label}</div><div class="stat-value"${colorStyle}>${s.value} <span class="stat-unit">${s.unit || ''}</span>${badge}</div></div>`;
-      });
-      html += '</div>';
+    // Week navigator (for types that support it)
+    if (weekRange) {
+      html += `<div class="week-navigator" id="week-nav">
+        <button class="week-arrow" onclick="App.shiftWeek(1)">‹</button>
+        <span class="week-range-label" id="week-range-label">${weekRange.label}</span>
+        <button class="week-arrow" id="week-arrow-right" onclick="App.shiftWeek(-1)" ${weekOffset === 0 ? 'disabled' : ''}>›</button>
+      </div>`;
     }
+
+    // Stats section
+    html += this._buildStatsHtml(stats);
 
     // BP zone legend (only for BP detail)
     if (type === 'bp_hr') {
       html += `<div class="bp-legend">
         <span class="bp-legend-item"><span class="bp-dot" style="background:#3B82F6"></span>Low</span>
         <span class="bp-legend-item"><span class="bp-dot" style="background:#10B981"></span>Normal</span>
-        <span class="bp-legend-item"><span class="bp-dot" style="background:#EC4899"></span>Elevated</span>
+        <span class="bp-legend-item"><span class="bp-dot" style="background:#EC4899"></span>Elev</span>
         <span class="bp-legend-item"><span class="bp-dot" style="background:#DC2626"></span>High</span>
         <span class="bp-legend-item"><span class="bp-dot" style="background:#991B1B"></span>Crisis</span>
+        <span class="bp-legend-item"><span class="bp-dot" style="background:transparent;border:2px solid #F59E0B;box-sizing:border-box"></span>AFib</span>
       </div>`;
+
+      // BP context selector (Morning / Post-Walk / Evening) — text toggle
+      const bpCtx = App._bpContext || 'morning';
+      html += `<div class="bp-context-filters">
+        <button class="${bpCtx === 'morning' ? 'active' : ''}" data-ctx="morning" onclick="App.setBpContext('morning')">Morning</button>
+        <button class="${bpCtx === 'post-walk' ? 'active' : ''}" data-ctx="post-walk" onclick="App.setBpContext('post-walk')">Post-Walk</button>
+        <button class="${bpCtx === 'evening' ? 'active' : ''}" data-ctx="evening" onclick="App.setBpContext('evening')">Evening</button>
+      </div>`;
+    }
+
+    // Time range filter for all chart types
+    const chartTypes = ['afib', 'bp_hr', 'sleep', 'weight', 'activity', 'nutrition', 'medication', 'ventolin'];
+    if (chartTypes.includes(type)) {
+      const ranges = [
+        { key: 'week', label: '7 Days' },
+        { key: 'month', label: '30 Days' },
+        { key: '3month', label: '3 Months' },
+        { key: 'all', label: 'All Time' }
+      ];
+      const active = Charts._chartRanges[type] || 'month';
+      html += `<div class="chart-range-filters">${ranges.map(r =>
+        `<button class="filter-chip${r.key === active ? ' active' : ''}" onclick="App.setChartRange('${type}','${r.key}')">${r.label}</button>`
+      ).join('')}</div>`;
     }
 
     // Chart placeholder
     html += '<div class="chart-container"><canvas id="detail-chart"></canvas></div>';
+
+    
 
     // Events list — grouped by local date (sleep uses wake time)
     if (events && events.length > 0) {
@@ -1025,7 +1188,12 @@ const UI = {
         lastWeek = thisWeek;
 
         html += `<div class="section-header"><h2>${this._friendlyDate(dateKey)}</h2></div>`;
+        // Enrich BP events with dynamic med context
+        const dayMeds = grouped[dateKey].filter(ev => ev.eventType === 'medication');
         grouped[dateKey].forEach(e => {
+          if (e.eventType === 'bp_hr') {
+            e._medCtx = App.computeMedContext(e.timestamp, dayMeds);
+          }
           html += this._renderEventItem(e);
         });
       });

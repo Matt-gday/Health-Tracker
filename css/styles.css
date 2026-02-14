@@ -488,14 +488,14 @@ a {
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: var(--space-md);
-  padding: var(--space-md);
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
 }
 
 .stat-card {
   background: var(--bg-card);
   border-radius: var(--radius-md);
-  padding: var(--space-md);
+  padding: var(--space-sm) 10px;
   box-shadow: var(--shadow-md);
 }
 
@@ -504,11 +504,11 @@ a {
   color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin-bottom: var(--space-xs);
+  margin-bottom: 1px;
 }
 
 .stat-card .stat-value {
-  font-size: var(--font-xl);
+  font-size: var(--font-lg);
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -776,7 +776,8 @@ a {
 .modal-sheet {
   width: 100%;
   max-width: 430px;
-  max-height: 90vh;
+  min-height: 75vh;
+  max-height: 96vh;
   background: var(--bg-primary);
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   overflow: hidden;
@@ -807,6 +808,9 @@ a {
 .modal-close-btn {
   width: 32px;
   height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -815,6 +819,7 @@ a {
   border-radius: 50%;
   cursor: pointer;
   color: var(--text-primary);
+  overflow: hidden;
 }
 
 .modal-close-btn svg {
@@ -904,6 +909,51 @@ a {
   margin-bottom: var(--space-sm);
   text-transform: uppercase;
   letter-spacing: 0.3px;
+}
+
+.form-group label.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  text-transform: none;
+  font-weight: 500;
+  cursor: pointer;
+  margin-bottom: 0;
+}
+
+.welcome-intro {
+  color: var(--text-secondary);
+  margin-bottom: var(--space-md);
+  font-size: var(--font-sm);
+}
+
+.label-with-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  line-height: 1;
+}
+
+.field-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  background: var(--bg-muted);
+  border-radius: 50%;
+  cursor: help;
+  flex-shrink: 0;
+  align-self: center;
+  transform: translateY(-2px);
+}
+.form-group label.checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent-blue);
 }
 
 .form-input {
@@ -1101,6 +1151,13 @@ textarea.form-input {
 .toast.toast-success { background: var(--accent-success); color: var(--text-inverse); }
 .toast.toast-error { background: var(--accent-danger); }
 .toast.toast-warning { background: var(--accent-afib); color: var(--text-primary); }
+
+.toast.toast-hint {
+  max-width: 90vw;
+}
+.toast.toast-hint span {
+  line-height: 1.4;
+}
 
 .toast svg {
   width: 18px;
@@ -1433,7 +1490,105 @@ textarea.form-input {
   color: var(--text-tertiary);
 }
 
+.settings-danger .settings-section-title {
+  color: #DC2626;
+}
+.settings-item-danger .settings-label svg {
+  color: #DC2626;
+}
+.settings-item-danger .settings-label span {
+  color: #DC2626;
+  font-weight: 600;
+}
+
+/* --- Week Navigator --- */
+.week-navigator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-xs);
+}
+.week-arrow {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  width: 36px;
+  height: 36px;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  line-height: 1;
+  padding-bottom: 4px;
+}
+.week-arrow:active {
+  background: var(--primary);
+  color: #fff;
+}
+.week-arrow:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.week-arrow:disabled:active {
+  background: var(--bg-card);
+  color: var(--primary);
+}
+.week-range-label {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 140px;
+  text-align: center;
+}
+
+/* --- BP Context Selector (text toggle) --- */
+.bp-context-filters {
+  display: flex;
+  gap: 12px;
+  padding: 0 var(--space-md);
+  margin: var(--space-xs) 0 var(--space-sm);
+  justify-content: center;
+}
+.bp-context-filters button {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  padding: 4px 14px;
+  border: 1.5px solid transparent;
+  border-radius: 20px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.bp-context-filters button.active {
+  color: var(--accent-blue);
+  border-color: var(--accent-blue);
+}
+
 /* --- Chart Container --- */
+/* --- Chart Range Filters --- */
+.chart-range-filters {
+  display: flex;
+  gap: var(--space-xs);
+  padding: 0 var(--space-md);
+  margin: var(--space-sm) 0;
+  justify-content: center;
+}
+.chart-range-filters .filter-chip {
+  font-size: var(--font-xs);
+  padding: 4px 12px;
+  min-width: 0;
+}
+
+
 .chart-container {
   padding: var(--space-md);
   background: var(--bg-card);
@@ -1551,15 +1706,15 @@ textarea.form-input {
 
 /* --- Ventolin Section --- */
 .ventolin-section {
-  margin-top: var(--space-lg);
-  padding-top: var(--space-lg);
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
   border-top: 1px solid rgba(0, 34, 68, 0.06);
 }
 
 .ventolin-section h3 {
-  font-size: var(--font-base);
+  font-size: var(--font-sm);
   font-weight: 700;
-  margin-bottom: var(--space-md);
+  margin-bottom: var(--space-sm);
 }
 
 /* --- Calendar Heatmap --- */
@@ -1623,4 +1778,526 @@ textarea.form-input {
     padding: var(--space-sm) var(--space-xs);
     min-height: 64px;
   }
+}
+
+/* Scroll-to-top button */
+.scroll-top-btn {
+  position: sticky;
+  bottom: 16px;
+  left: calc(100% - 56px);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--accent-blue);
+  color: white;
+  border: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  pointer-events: none;
+  z-index: 50;
+}
+
+.scroll-top-btn.visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.scroll-top-btn svg {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+/* Monthly Summary */
+.monthly-summary {
+  margin: 0 var(--space-md) var(--space-md);
+  padding: var(--space-md);
+  background: var(--bg-primary);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+}
+
+.monthly-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: var(--space-sm);
+}
+
+.monthly-summary-title {
+  font-size: var(--font-xs);
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.month-arrow {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  font-size: 16px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+  line-height: 1;
+  padding-bottom: 3px;
+}
+
+.month-arrow:active {
+  background: var(--bg-secondary);
+}
+
+.month-arrow:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.monthly-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-md);
+}
+
+.monthly-cell {
+  flex: 1;
+  min-width: 0;
+}
+
+.monthly-divider {
+  width: 1px;
+  background: var(--border);
+  align-self: stretch;
+}
+
+.monthly-label {
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+  margin-bottom: 2px;
+}
+
+.monthly-label.monthly-current {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.monthly-value {
+  font-size: var(--font-lg);
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.monthly-detail {
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.monthly-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+/* Skipped Meds Modal */
+.skipped-meds-list {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.skipped-date-heading {
+  font-weight: 600;
+  font-size: var(--font-sm);
+  color: var(--text-primary);
+  padding: 8px 0 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+
+.skipped-date-heading:not(:first-child) {
+  margin-top: 12px;
+}
+
+.skipped-med-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 4px;
+  border-radius: var(--radius);
+  background: #FEF2F2;
+}
+
+.skipped-med-item + .skipped-med-item {
+  margin-top: 4px;
+}
+
+.skipped-med-icon {
+  font-size: 18px;
+  color: #EF4444;
+  flex-shrink: 0;
+}
+
+.skipped-med-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.skipped-med-name {
+  font-weight: 600;
+  font-size: var(--font-sm);
+  color: var(--text-primary);
+}
+
+.skipped-med-detail {
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+}
+
+/* Clickable stat card */
+.stat-card[onclick] {
+  border: 1px dashed var(--border);
+  transition: background 0.15s;
+}
+.stat-card[onclick]:active {
+  background: var(--bg-secondary);
+}
+
+/* ============================================
+   AFib Insights Page
+   ============================================ */
+.section-title {
+  font-size: var(--font-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+/* Episode Cards */
+.insight-episode-card {
+  margin: var(--space-xs) var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-primary);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+.insight-episode-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-xs);
+}
+.insight-episode-date {
+  font-weight: 700;
+  font-size: var(--font-sm);
+  color: var(--text-primary);
+}
+.insight-episode-time {
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
+  margin-left: 6px;
+}
+.insight-episode-dur {
+  font-weight: 700;
+  font-size: var(--font-sm);
+  color: #F59E0B;
+  background: rgba(245,158,11,0.1);
+  padding: 2px 10px;
+  border-radius: 12px;
+}
+.insight-episode-notes {
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
+  font-style: italic;
+  margin-top: var(--space-xs);
+  padding-top: var(--space-xs);
+  border-top: 1px solid var(--border);
+}
+
+/* Context Grid inside episode cards */
+.insight-ctx-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.insight-ctx-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.insight-ctx-icon {
+  font-size: 12px;
+}
+.insight-ctx-warn {
+  background: rgba(239,68,68,0.1);
+  color: #DC2626;
+}
+.insight-ctx-ok {
+  background: rgba(16,185,129,0.1);
+  color: #059669;
+}
+.insight-ctx-neutral {
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+}
+.insight-med-detail {
+  font-size: 11px;
+  color: #DC2626;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+.med-afib-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: rgba(239,68,68,0.15);
+  color: #DC2626;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.insight-afib-med-tag {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: rgba(239,68,68,0.2);
+  color: #DC2626;
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-left: 4px;
+}
+
+/* Pattern Analysis Comparison */
+.insight-comp-header {
+  display: flex;
+  align-items: center;
+  padding: var(--space-xs) 0;
+  gap: 8px;
+}
+.insight-comp-header .insight-comp-col-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  letter-spacing: 0.3px;
+}
+.insight-comp-header .insight-comp-col-label:nth-child(3) {
+  margin-left: auto;
+}
+.insight-comp-row {
+  display: flex;
+  align-items: center;
+  padding: 8px 0;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.insight-comp-icon {
+  font-size: 16px;
+  width: 24px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.insight-comp-label {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+  min-width: 0;
+}
+.insight-comp-vals {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-sm);
+  flex-shrink: 0;
+}
+.insight-comp-vs {
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+.insight-comp-afib {
+  font-weight: 700;
+  min-width: 50px;
+  text-align: right;
+}
+.insight-comp-non {
+  font-weight: 500;
+  color: var(--text-secondary);
+  min-width: 50px;
+  text-align: right;
+}
+.insight-comp-warn .insight-comp-afib {
+  color: #EF4444;
+}
+.insight-comp-ok .insight-comp-afib {
+  color: #10B981;
+}
+.insight-comp-neutral .insight-comp-afib {
+  color: var(--text-primary);
+}
+
+/* Potential Triggers Ranking */
+.insight-trigger-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+}
+.insight-trigger-icon {
+  font-size: 16px;
+  width: 24px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.insight-trigger-label {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 120px;
+  flex-shrink: 0;
+}
+.insight-trigger-bar-bg {
+  flex: 1;
+  height: 8px;
+  background: var(--bg-muted);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.insight-trigger-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s;
+}
+.insight-trigger-pct {
+  font-size: var(--font-sm);
+  font-weight: 700;
+  min-width: 36px;
+  text-align: right;
+}
+
+/* Onset Context & Symptom Grid */
+.onset-ctx-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.onset-ctx-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--bg-muted);
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.onset-ctx-option:has(input:checked) {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--accent-primary);
+  font-weight: 600;
+}
+.onset-ctx-option input[type="checkbox"] {
+  accent-color: var(--accent-primary);
+  width: 18px;
+  height: 18px;
+}
+
+/* Stress Dots */
+.stress-section {
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border);
+}
+.stress-section h3 {
+  margin-bottom: 4px;
+  font-size: var(--font-sm);
+}
+.stress-dots {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.stress-dot {
+  flex: 1;
+  height: 34px;
+  border-radius: var(--radius-md);
+  border: 2px solid var(--border);
+  background: var(--bg-muted);
+  font-size: var(--font-md);
+  font-weight: 700;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.stress-dot:hover {
+  border-color: var(--accent-primary);
+}
+.stress-dot.active {
+  background: rgba(30, 58, 138, 0.85);
+  border-color: #1e3a8a;
+  color: #fff;
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,0.2);
+}
+
+/* AFib Symptom Button (on homepage) */
+.afib-symptom-btn {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 12px;
+  border: 1.5px solid var(--accent-warning);
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--accent-warning);
+  cursor: pointer;
+  vertical-align: middle;
+}
+.afib-symptom-btn:active {
+  background: rgba(245, 158, 11, 0.25);
+}
+
+/* Onset & Symptoms labels on insight cards */
+.insight-onset-label,
+.insight-symptoms-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding: 4px 0;
+  line-height: 1.3;
+}
+.insight-onset-label {
+  color: var(--accent-primary);
+  font-weight: 600;
+}
+.insight-symptoms-label {
+  color: #EF4444;
+  font-weight: 500;
 }
