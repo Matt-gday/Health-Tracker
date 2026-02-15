@@ -4,7 +4,7 @@
    ============================================ */
 
 const App = {
-  APP_VERSION: '2.2.0',
+  APP_VERSION: '2.3.0',
   currentTab: 'home',
   previousPages: [],
   historyFilters: ['all'],
@@ -1684,13 +1684,15 @@ const App = {
     }, true);
   },
 
-  async deleteEntryById(id) {
+  async deleteEntryById(id, skipConfirm = false) {
     if (typeof id === 'string' && id.startsWith('demo-')) {
       UI.showToast('Demo entry cannot be deleted', 'info');
       return;
     }
-    const confirmed = await UI.confirm('Delete Entry', 'Are you sure you want to delete this entry? This cannot be undone.');
-    if (!confirmed) return;
+    if (!skipConfirm) {
+      const confirmed = await UI.confirm('Delete Entry', 'Are you sure you want to delete this entry? This cannot be undone.');
+      if (!confirmed) return;
+    }
     await DB.deleteEvent(id);
     UI.showToast('Entry deleted', 'info');
     await this.renderCurrentTab();
