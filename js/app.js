@@ -4,7 +4,7 @@
    ============================================ */
 
 const App = {
-  APP_VERSION: '2.3.0',
+  APP_VERSION: '2.3.1',
   currentTab: 'home',
   previousPages: [],
   historyFilters: ['all'],
@@ -1642,6 +1642,7 @@ const App = {
     };
 
     document.addEventListener('touchstart', (e) => {
+      if (e.target.closest('.swipeable-delete')) return;
       const entry = e.target.closest('.swipeable-entry');
       if (!entry) return;
       const slider = entry.querySelector('.swipeable-entry-slider');

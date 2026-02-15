@@ -443,7 +443,7 @@ const UI = {
       <div class="swipeable-entry" data-id="${event.id}">
         <div class="swipeable-entry-slider">
           <div class="swipeable-entry-content" onclick="App.editEntry('${event.id}')">${entryItem}</div>
-          <button type="button" class="swipeable-delete" onclick="event.stopPropagation(); App.deleteEntryById('${event.id}', true)">Delete</button>
+          <button type="button" class="swipeable-delete" data-delete-id="${event.id}" ontouchend="event.preventDefault(); event.stopPropagation(); App.deleteEntryById('${event.id}', true)" onclick="event.stopPropagation(); App.deleteEntryById('${event.id}', true)">Delete</button>
         </div>
       </div>`;
   },
