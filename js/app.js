@@ -24,6 +24,7 @@ const App = {
       await this.loadToggleStates();
       await this.renderCurrentTab();
       this.setupToggleGroupListeners();
+      this._setupSwipeToDelete();
       this._autoCheckForUpdates();
       await this._checkFirstLaunch();
       await this.checkMedicationReminders();
@@ -1624,6 +1625,73 @@ const App = {
     await DB.deleteEvent(this._editingEventId);
     UI.closeModal();
     this._editingEventId = null;
+    UI.showToast('Entry deleted', 'info');
+    await this.renderCurrentTab();
+  },
+
+  _setupSwipeToDelete() {
+    let swipeStartX = 0;
+    let swipeEl = null;
+
+    const closeAll = () => {
+      document.querySelectorAll('.swipeable-entry-slider').forEach(el => {
+        el.style.transition = 'transform 0.2s ease-out';
+        el.style.transform = 'translateX(0)';
+      });
+      swipeEl = null;
+    };
+
+    document.addEventListener('touchstart', (e) => {
+      const entry = e.target.closest('.swipeable-entry');
+      if (!entry) return;
+      const slider = entry.querySelector('.swipeable-entry-slider');
+      if (!slider) return;
+      closeAll();
+      swipeEl = slider;
+      swipeStartX = e.touches[0].clientX;
+      slider.style.transition = 'none';
+    }, { passive: true });
+
+    document.addEventListener('touchmove', (e) => {
+      if (!swipeEl) return;
+      const dx = e.touches[0].clientX - swipeStartX;
+      const tx = Math.min(0, Math.max(-80, dx));
+      swipeEl.style.transform = `translateX(${tx}px)`;
+    }, { passive: true });
+
+    document.addEventListener('touchend', (e) => {
+      if (!swipeEl) return;
+      const currentTx = parseFloat(swipeEl.style.transform.replace('translateX(', '').replace('px)', '')) || 0;
+      swipeEl.style.transition = 'transform 0.2s ease-out';
+      swipeEl.style.transform = currentTx < -40 ? 'translateX(-80px)' : 'translateX(0)';
+      swipeEl = null;
+    }, { passive: true });
+
+    document.addEventListener('click', (e) => {
+      const entry = e.target.closest('.swipeable-entry');
+      if (!entry) return;
+      if (e.target.closest('.swipeable-delete')) return;
+      const slider = entry.querySelector('.swipeable-entry-slider');
+      const isOpen = slider && slider.style.transform && slider.style.transform.includes('-80px');
+      if (isOpen) {
+        slider.style.transition = 'transform 0.2s ease-out';
+        slider.style.transform = 'translateX(0)';
+        e.preventDefault();
+        e.stopPropagation();
+      } else {
+        closeAll();
+      }
+    }, true);
+  },
+
+  async deleteEntryById(id) {
+    if (typeof id === 'string' && id.startsWith('demo-')) {
+      UI.showToast('Demo entry cannot be deleted', 'info');
+      return;
+    }
+    const confirmed = await UI.confirm('Delete Entry', 'Are you sure you want to delete this entry? This cannot be undone.');
+    if (!confirmed) return;
+    await DB.deleteEvent(id);
     UI.showToast('Entry deleted', 'info');
     await this.renderCurrentTab();
   },

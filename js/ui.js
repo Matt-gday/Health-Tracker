@@ -423,8 +423,9 @@ const UI = {
     const editedBadge = event.lastEdited ? '<span class="edited-badge">edited</span>' : '';
     const skippedClass = (event.eventType === 'medication' && event.status === 'Skipped') ? ' entry-skipped' : '';
     const bpBadge = config.bpBadge || '';
-    return `
-      <div class="entry-item${skippedClass}" onclick="App.editEntry('${event.id}')">
+    const isDemo = typeof event.id === 'string' && event.id.startsWith('demo-');
+    const entryItem = `
+      <div class="entry-item${skippedClass}">
         <div class="entry-icon ${config.iconClass}"><i data-lucide="${config.icon}"></i></div>
         <div class="entry-body">
           <div class="entry-title">${config.title} ${afibFlag}${bpBadge}</div>
@@ -433,6 +434,16 @@ const UI = {
         <div class="entry-meta">
           <div class="entry-time">${this.formatTime(event.timestamp)}</div>
           ${editedBadge}
+        </div>
+      </div>`;
+    if (isDemo) {
+      return `<div class="entry-item-wrap" onclick="App.editEntry('${event.id}')">${entryItem}</div>`;
+    }
+    return `
+      <div class="swipeable-entry" data-id="${event.id}">
+        <div class="swipeable-entry-slider">
+          <div class="swipeable-entry-content" onclick="App.editEntry('${event.id}')">${entryItem}</div>
+          <button type="button" class="swipeable-delete" onclick="event.stopPropagation(); App.deleteEntryById('${event.id}')">Delete</button>
         </div>
       </div>`;
   },

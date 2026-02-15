@@ -1670,6 +1670,48 @@ textarea.form-input {
   box-shadow: inset 0 0 0 1.5px rgba(0, 34, 68, 0.12);
 }
 
+/* --- Swipe to delete (iPhone-style) --- */
+.swipeable-entry {
+  overflow: hidden;
+  margin-bottom: var(--space-sm);
+  border-radius: var(--radius-md);
+}
+
+.swipeable-entry-slider {
+  display: flex;
+  width: calc(100% + 80px);
+  transition: transform 0.2s ease-out;
+}
+
+.swipeable-entry-content {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.swipeable-entry-content .entry-item {
+  margin-bottom: 0;
+}
+
+.swipeable-delete {
+  flex-shrink: 0;
+  width: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #DC2626;
+  color: white;
+  border: none;
+  font-size: var(--font-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.entry-item-wrap {
+  margin-bottom: var(--space-sm);
+  cursor: pointer;
+}
+
 /* --- Swipe to delete hint --- */
 .swipe-hint {
   font-size: var(--font-xs);
