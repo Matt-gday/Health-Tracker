@@ -641,11 +641,9 @@ const App = {
           <button class="toggle-option" data-value="longer">Longer</button>
           <button class="toggle-option" data-value="ongoing">Ongoing</button>
         </div>
-        <div id="symptom-duration-longer" style="display:none;margin-top:8px" class="symptom-duration-longer-row">
-          <input type="number" class="form-input" id="symptom-duration-hours" placeholder="H" min="0" max="24" style="width:60px;text-align:center">
-          <span>hr</span>
-          <input type="number" class="form-input" id="symptom-duration-mins" placeholder="M" min="0" max="59" style="width:60px;text-align:center">
-          <span>min</span>
+        <div id="symptom-duration-longer" style="display:none;margin-top:8px">
+          <input type="time" class="form-input" id="symptom-duration-time" value="01:00" step="60">
+          <span style="font-size:var(--font-sm);color:var(--text-tertiary);margin-left:8px">(hours:minutes)</span>
         </div>
       </div>
       <div class="form-group">
@@ -661,7 +659,7 @@ const App = {
       const updateDurationUI = () => {
         const val = this._getToggleValue('symptom-duration-type');
         const longerEl = document.getElementById('symptom-duration-longer');
-        if (longerEl) longerEl.style.display = val === 'longer' ? 'flex' : 'none';
+        if (longerEl) longerEl.style.display = val === 'longer' ? 'block' : 'none';
       };
       document.querySelectorAll('#symptom-duration-type .toggle-option').forEach(btn => {
         btn.addEventListener('click', updateDurationUI);
@@ -695,10 +693,10 @@ const App = {
     if (durationType === 'seconds') duration_min = 0.5;
     else if (durationType === 'minutes') duration_min = 5;
     else if (durationType === 'longer') {
-      const hrs = parseInt(document.getElementById('symptom-duration-hours')?.value || '0', 10) || 0;
-      const mins = parseInt(document.getElementById('symptom-duration-mins')?.value || '0', 10) || 0;
-      duration_min = hrs * 60 + mins;
-      if (duration_min <= 0) { UI.showToast('Enter duration for Longer', 'error'); return; }
+      const timeVal = document.getElementById('symptom-duration-time')?.value || '00:00';
+      const [h, m] = timeVal.split(':').map(n => parseInt(n, 10) || 0);
+      duration_min = h * 60 + m;
+      if (duration_min <= 0) { UI.showToast('Set duration for Longer', 'error'); return; }
     }
     const symptomList = symptoms.map(s => s === 'Other' && otherSymptom ? otherSymptom : s).filter(Boolean);
     const contextList = contexts.length > 0 ? contexts.map(c => c === 'Other' && otherContext ? otherContext : c).filter(Boolean) : [];
@@ -1750,7 +1748,7 @@ const App = {
       const updateDurationUI = () => {
         const val = this._getToggleValue('symptom-edit-duration-type');
         const longerEl = document.getElementById('symptom-edit-duration-longer');
-        if (longerEl) longerEl.style.display = val === 'longer' ? 'flex' : 'none';
+        if (longerEl) longerEl.style.display = val === 'longer' ? 'block' : 'none';
       };
       document.querySelectorAll('#symptom-edit-duration-type .toggle-option').forEach(btn => {
         btn.addEventListener('click', updateDurationUI);
@@ -1783,10 +1781,10 @@ const App = {
     if (durationType === 'seconds') duration_min = 0.5;
     else if (durationType === 'minutes') duration_min = 5;
     else if (durationType === 'longer') {
-      const hrs = parseInt(document.getElementById('symptom-edit-duration-hours')?.value || '0', 10) || 0;
-      const mins = parseInt(document.getElementById('symptom-edit-duration-mins')?.value || '0', 10) || 0;
-      duration_min = hrs * 60 + mins;
-      if (duration_min <= 0) { UI.showToast('Enter duration for Longer', 'error'); return; }
+      const timeVal = document.getElementById('symptom-edit-duration-time')?.value || '00:00';
+      const [h, m] = timeVal.split(':').map(n => parseInt(n, 10) || 0);
+      duration_min = h * 60 + m;
+      if (duration_min <= 0) { UI.showToast('Set duration for Longer', 'error'); return; }
     }
     const symptomList = symptoms.map(s => s === 'Other' && otherSymptom ? otherSymptom : s).filter(Boolean);
     const contextList = contexts.map(c => c === 'Other' && otherContext ? otherContext : c).filter(Boolean);

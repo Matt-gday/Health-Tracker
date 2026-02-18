@@ -987,14 +987,15 @@ const UI = {
     const ts = event.timestamp ? this.localISOString(new Date(event.timestamp)) : this.localISOString();
     const dm = event.duration_min;
     let durationType = 'ongoing';
-    let durationHours = '', durationMins = '';
+    let durationTimeVal = '01:00';
     if (dm != null) {
       if (dm <= 0.75) durationType = 'seconds';
       else if (dm >= 4 && dm <= 6) durationType = 'minutes';
       else {
         durationType = 'longer';
-        durationHours = String(Math.floor(dm / 60));
-        durationMins = String(Math.round(dm % 60));
+        const h = Math.floor(dm / 60);
+        const m = Math.round(dm % 60);
+        durationTimeVal = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
       }
     }
     return `
@@ -1016,11 +1017,9 @@ const UI = {
           <button class="toggle-option${durationType === 'longer' ? ' active' : ''}" data-value="longer">Longer</button>
           <button class="toggle-option${durationType === 'ongoing' ? ' active' : ''}" data-value="ongoing">Ongoing</button>
         </div>
-        <div id="symptom-edit-duration-longer" style="display:${durationType === 'longer' ? 'flex' : 'none'};margin-top:8px" class="symptom-duration-longer-row">
-          <input type="number" class="form-input" id="symptom-edit-duration-hours" placeholder="H" min="0" max="24" value="${durationHours}" style="width:60px;text-align:center">
-          <span>hr</span>
-          <input type="number" class="form-input" id="symptom-edit-duration-mins" placeholder="M" min="0" max="59" value="${durationMins}" style="width:60px;text-align:center">
-          <span>min</span>
+        <div id="symptom-edit-duration-longer" style="display:${durationType === 'longer' ? 'block' : 'none'};margin-top:8px">
+          <input type="time" class="form-input" id="symptom-edit-duration-time" value="${durationTimeVal}" step="60">
+          <span style="font-size:var(--font-sm);color:var(--text-tertiary);margin-left:8px">(hours:minutes)</span>
         </div>
       </div>
       <div class="form-group">
