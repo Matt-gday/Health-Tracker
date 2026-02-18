@@ -62,7 +62,7 @@ const Demo = {
   getMedications() {
     return [
       { name: 'Sotalol Hydrochloride 80mg', dosage: 'Half tablet (40mg)', schedule: 'Both', afibRelevant: true },
-      { name: 'Telmisartan/Hydrochlorothiazide 80mg/25mg', dosage: '1 tablet', schedule: 'Morning', afibRelevant: false },
+      { name: 'Telmisartan/Hydrochlorothiazide 80mg/25mg', dosage: '1 tablet', schedule: 'Morning', afibRelevant: false, bpRelevant: true },
       { name: 'Rilast Turbuhaler (Budesonide/Formoterol)', dosage: '1 inhalation', schedule: 'Both', afibRelevant: false },
       { name: 'Super Multi Plus (Ethical Nutrients)', dosage: '1 tablet', schedule: 'Morning', afibRelevant: false },
       { name: 'Magnesium Glycinate 400mg', dosage: '1 tablet', schedule: 'Morning', afibRelevant: false }

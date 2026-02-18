@@ -4,7 +4,7 @@
    ============================================ */
 
 const App = {
-  APP_VERSION: '2.3.1',
+  APP_VERSION: '2.3.2',
   currentTab: 'home',
   previousPages: [],
   historyFilters: ['all'],
@@ -1854,18 +1854,22 @@ const App = {
       // Build context items
       let ctx = '';
 
-      // Meds context — show which specific doses were missed with AM/PM and timing; flag AFib-relevant meds
+      // Meds context — show which specific doses were missed with AM/PM and timing; flag AFib- and BP-relevant meds
       let medDetail = '';
       const medLookup = (medications || []).reduce((acc, m) => { acc[m.name] = m; return acc; }, {});
       if (missedMeds.length > 0) {
         const afibMissed = missedMeds.filter(m => (medLookup[m.medName || m.name] || {}).afibRelevant);
+        const bpMissed = missedMeds.filter(m => (medLookup[m.medName || m.name] || {}).bpRelevant);
         const afibLabel = afibMissed.length > 0 ? ` (${afibMissed.length} AFib med${afibMissed.length > 1 ? 's' : ''})` : '';
-        ctx += `<div class="insight-ctx-item insight-ctx-warn"><span class="insight-ctx-icon">💊</span><span>${missedMeds.length} dose${missedMeds.length > 1 ? 's' : ''} missed${afibLabel}</span></div>`;
+        const bpLabel = bpMissed.length > 0 ? ` (${bpMissed.length} BP med${bpMissed.length > 1 ? 's' : ''})` : '';
+        ctx += `<div class="insight-ctx-item insight-ctx-warn"><span class="insight-ctx-icon">💊</span><span>${missedMeds.length} dose${missedMeds.length > 1 ? 's' : ''} missed${afibLabel}${bpLabel}</span></div>`;
         const missedLines = missedMeds.map(m => {
           const period = m.timeOfDay === 'AM' ? 'AM' : 'PM';
           const dayLabel = UI.localDateKey(m.timestamp) === epDateKey ? 'same day' : 'day before';
-          const afibTag = (medLookup[m.medName || m.name] || {}).afibRelevant ? ' <span class="insight-afib-med-tag">AFib</span>' : '';
-          return `${period}: ${m.medName || m.name || 'Unknown'}${afibTag} (${dayLabel})`;
+          const medInfo = medLookup[m.medName || m.name] || {};
+          const afibTag = medInfo.afibRelevant ? ' <span class="insight-afib-med-tag">AFib</span>' : '';
+          const bpTag = medInfo.bpRelevant ? ' <span class="insight-bp-med-tag">BP</span>' : '';
+          return `${period}: ${m.medName || m.name || 'Unknown'}${afibTag}${bpTag} (${dayLabel})`;
         });
         medDetail = `<div class="insight-med-detail">${missedLines.join('<br>')}</div>`;
       } else if (takenMeds.length > 0) {
@@ -2226,13 +2230,16 @@ const App = {
       const medLookup = (medications || []).reduce((acc, m) => { acc[m.name] = m; return acc; }, {});
       // Missed AFib-relevant meds (Sotalol, blood thinners, etc.)
       let missedAfibCount = 0;
+      let missedBpCount = 0;
       recent90.forEach(ep => {
         const dk = UI.localDateKey(ep.startTime || ep.timestamp);
         const prevDk = new Date(new Date(ep.startTime || ep.timestamp).getTime() - 86400000).toISOString().slice(0, 10);
         const dayM = medEvents.filter(m => (UI.localDateKey(m.timestamp) === dk || UI.localDateKey(m.timestamp) === prevDk) && m.status === 'Skipped');
         if (dayM.some(m => (medLookup[m.medName || m.name] || {}).afibRelevant)) missedAfibCount++;
+        if (dayM.some(m => (medLookup[m.medName || m.name] || {}).bpRelevant)) missedBpCount++;
       });
       if (missedAfibCount > 0) triggers.push({ label: 'Missed AFib med', pct: Math.round(missedAfibCount / recent90.length * 100), icon: '💊', color: '#EF4444' });
+      if (missedBpCount > 0) triggers.push({ label: 'Missed BP med', pct: Math.round(missedBpCount / recent90.length * 100), icon: '🩺', color: '#3B82F6' });
       // Missed any meds
       let missedCount = 0;
       recent90.forEach(ep => {
@@ -2503,11 +2510,12 @@ const App = {
     let html = '<div class="entry-list">';
     meds.forEach(med => {
       const afibBadge = med.afibRelevant ? ' <span class="med-afib-badge">AFib</span>' : '';
+      const bpBadge = med.bpRelevant ? ' <span class="med-bp-badge">BP</span>' : '';
       html += `
         <div class="entry-item" onclick="App.editMedication('${med.id}')">
           <div class="entry-icon med"><i data-lucide="pill"></i></div>
           <div class="entry-body">
-            <div class="entry-title">${med.name}${afibBadge}</div>
+            <div class="entry-title">${med.name}${afibBadge}${bpBadge}</div>
             <div class="entry-subtitle">${med.dosage} — ${med.schedule}</div>
           </div>
           <i data-lucide="chevron-right" style="width:16px;height:16px;color:var(--text-tertiary)"></i>
@@ -2547,6 +2555,12 @@ const App = {
           <input type="checkbox" id="med-setting-afib" ${med.afibRelevant ? 'checked' : ''}>
           AFib-relevant (e.g. Sotalol, blood thinners)
         </label>
+      </div>
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="med-setting-bp" ${med.bpRelevant ? 'checked' : ''}>
+          BP medication (e.g. Telmisartan, ACE inhibitors)
+        </label>
       </div>`;
     const footer = `
       <button class="btn btn-danger btn-sm" style="margin-bottom:8px" onclick="App.deleteMedication('${id}')">Delete Medication</button>
@@ -2563,7 +2577,8 @@ const App = {
       name: document.getElementById('med-setting-name').value.trim(),
       dosage: document.getElementById('med-setting-dosage').value.trim(),
       schedule: this._getToggleValue('med-setting-schedule') || 'Morning',
-      afibRelevant: document.getElementById('med-setting-afib')?.checked || false
+      afibRelevant: document.getElementById('med-setting-afib')?.checked || false,
+      bpRelevant: document.getElementById('med-setting-bp')?.checked || false
     });
     UI.closeModal();
     UI.showToast('Medication updated', 'success');
@@ -2592,6 +2607,12 @@ const App = {
           <input type="checkbox" id="med-setting-afib">
           AFib-relevant (e.g. Sotalol, blood thinners)
         </label>
+      </div>
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="med-setting-bp">
+          BP medication (e.g. Telmisartan, ACE inhibitors)
+        </label>
       </div>`;
     const footer = `
       <button class="btn btn-primary" onclick="App.saveNewMedication()">Add</button>
@@ -2615,7 +2636,8 @@ const App = {
       name,
       dosage: document.getElementById('med-setting-dosage').value.trim(),
       schedule: this._getToggleValue('med-setting-schedule') || 'Both',
-      afibRelevant: document.getElementById('med-setting-afib')?.checked || false
+      afibRelevant: document.getElementById('med-setting-afib')?.checked || false,
+      bpRelevant: document.getElementById('med-setting-bp')?.checked || false
     });
     UI.closeModal();
     UI.showToast('Medication added', 'success');

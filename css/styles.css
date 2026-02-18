@@ -2135,6 +2135,29 @@ textarea.form-input {
   border-radius: 4px;
   margin-left: 4px;
 }
+.med-bp-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: rgba(59,130,246,0.15);
+  color: #2563EB;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.insight-bp-med-tag {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: rgba(59,130,246,0.2);
+  color: #2563EB;
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-left: 4px;
+}
 
 /* Pattern Analysis Comparison */
 .insight-comp-header {

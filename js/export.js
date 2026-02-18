@@ -28,8 +28,12 @@ const Export = {
     const goalWeight = await DB.getSetting('goalWeight') || '';
     const drinksAlcohol = await DB.getSetting('drinksAlcohol') || 'no';
     const medList = meds.map(m => `${m.name} (${m.dosage}, ${m.schedule})`).join('; ');
+    const afibMeds = meds.filter(m => m.afibRelevant).map(m => m.name).join('; ');
+    const bpMeds = meds.filter(m => m.bpRelevant).map(m => m.name).join('; ');
+    const appVersion = (typeof App !== 'undefined' && App.APP_VERSION) ? App.APP_VERSION : '';
 
     const heightCm = userHeight ? parseInt(userHeight, 10) : null;
+    const medLookup = meds.reduce((acc, m) => { acc[m.name] = m; return acc; }, {});
 
     // Pre-fetch for dynamic BP context
     const allMedEvents = events.filter(e => e.eventType === 'medication');
@@ -43,7 +47,7 @@ const Export = {
       'weight_kg', 'bmi',
       'steps',
       'item_name', 'quantity', 'volume_ml', 'calories_kcal', 'protein_g', 'carbs_g', 'fat_g', 'sodium_mg', 'caffeine_mg', 'alcohol_units',
-      'med_name', 'med_dosage', 'med_status', 'med_time_of_day',
+      'med_name', 'med_dosage', 'med_status', 'med_time_of_day', 'med_afib_relevant', 'med_bp_relevant',
       'start_time', 'end_time', 'duration_min', 'onset_context', 'onset_notes', 'afib_episode_start_time',
       'symptoms', 'stress_level', 'ventolin_context',
       'bp_med_context', 'bp_mins_since_meds', 'bp_category', 'bp_walk_context', 'bp_food_context', 'bp_caffeine_context',
@@ -58,7 +62,7 @@ const Export = {
         weight_kg: '', bmi: '',
         steps: '',
         item_name: '', quantity: '', volume_ml: '', calories_kcal: '', protein_g: '', carbs_g: '', fat_g: '', sodium_mg: '', caffeine_mg: '', alcohol_units: '',
-        med_name: '', med_dosage: '', med_status: '', med_time_of_day: '',
+        med_name: '', med_dosage: '', med_status: '', med_time_of_day: '', med_afib_relevant: '', med_bp_relevant: '',
         start_time: '', end_time: '', duration_min: '', onset_context: '', onset_notes: '', afib_episode_start_time: '',
         symptoms: '', stress_level: '', ventolin_context: '',
         bp_med_context: '', bp_mins_since_meds: '', bp_category: '', bp_walk_context: '', bp_food_context: '', bp_caffeine_context: '',
@@ -119,6 +123,9 @@ const Export = {
           obj.med_dosage = e.dosage || '';
           obj.med_status = e.status || '';
           obj.med_time_of_day = e.timeOfDay || '';
+          const medInfo = medLookup[e.medName || ''] || {};
+          obj.med_afib_relevant = medInfo.afibRelevant ? 'true' : 'false';
+          obj.med_bp_relevant = medInfo.bpRelevant ? 'true' : 'false';
           break;
         case 'ventolin':
           obj.ventolin_context = e.context || '';
@@ -148,6 +155,7 @@ const Export = {
     const profileLines = [
       '# Heart & Health Tracker — Export for AI Analysis',
       `# Generated: ${new Date().toISOString().slice(0, 10)}`,
+      `# app_version=${appVersion}`,
       '# timezone=Australia/Brisbane (UTC+10, no DST)',
       '# PROFILE (use for age, BMI context, medication list):',
       `# name=${userName}`,
@@ -157,6 +165,8 @@ const Export = {
       `# goal_weight_kg=${goalWeight}`,
       `# drinks_alcohol=${drinksAlcohol}`,
       `# medications=${medList.replace(/"/g, '""')}`,
+      `# afib_medications=${afibMeds.replace(/"/g, '""')}`,
+      `# bp_medications=${bpMeds.replace(/"/g, '""')}`,
       '#',
       '# EVENTS (one row per logged entry):'
     ];
