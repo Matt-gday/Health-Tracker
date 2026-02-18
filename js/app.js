@@ -4,7 +4,7 @@
    ============================================ */
 
 const App = {
-  APP_VERSION: '2.3.6',
+  APP_VERSION: '2.3.7',
   currentTab: 'home',
   previousPages: [],
   historyFilters: ['all'],
@@ -641,9 +641,13 @@ const App = {
           <button class="toggle-option" data-value="longer">Longer</button>
           <button class="toggle-option" data-value="ongoing">Ongoing</button>
         </div>
-        <div id="symptom-duration-longer" style="display:none;margin-top:8px">
-          <input type="time" class="form-input" id="symptom-duration-time" value="01:00" step="60">
-          <span style="font-size:var(--font-sm);color:var(--text-tertiary);margin-left:8px">(hours:minutes)</span>
+        <div id="symptom-duration-longer" style="display:none;margin-top:8px" class="symptom-duration-picker">
+          <select class="form-input" id="symptom-duration-hours">
+            ${Array.from({ length: 25 }, (_, i) => `<option value="${i}"${i === 1 ? ' selected' : ''}>${i} hr</option>`).join('')}
+          </select>
+          <select class="form-input" id="symptom-duration-mins">
+            ${Array.from({ length: 12 }, (_, i) => i * 5).map(m => `<option value="${m}"${m === 0 ? ' selected' : ''}>${m} min</option>`).join('')}
+          </select>
         </div>
       </div>
       <div class="form-group">
@@ -693,9 +697,9 @@ const App = {
     if (durationType === 'seconds') duration_min = 0.5;
     else if (durationType === 'minutes') duration_min = 5;
     else if (durationType === 'longer') {
-      const timeVal = document.getElementById('symptom-duration-time')?.value || '00:00';
-      const [h, m] = timeVal.split(':').map(n => parseInt(n, 10) || 0);
-      duration_min = h * 60 + m;
+      const hrs = parseInt(document.getElementById('symptom-duration-hours')?.value || '0', 10) || 0;
+      const mins = parseInt(document.getElementById('symptom-duration-mins')?.value || '0', 10) || 0;
+      duration_min = hrs * 60 + mins;
       if (duration_min <= 0) { UI.showToast('Set duration for Longer', 'error'); return; }
     }
     const symptomList = symptoms.map(s => s === 'Other' && otherSymptom ? otherSymptom : s).filter(Boolean);
@@ -1781,9 +1785,9 @@ const App = {
     if (durationType === 'seconds') duration_min = 0.5;
     else if (durationType === 'minutes') duration_min = 5;
     else if (durationType === 'longer') {
-      const timeVal = document.getElementById('symptom-edit-duration-time')?.value || '00:00';
-      const [h, m] = timeVal.split(':').map(n => parseInt(n, 10) || 0);
-      duration_min = h * 60 + m;
+      const hrs = parseInt(document.getElementById('symptom-edit-duration-hours')?.value || '0', 10) || 0;
+      const mins = parseInt(document.getElementById('symptom-edit-duration-mins')?.value || '0', 10) || 0;
+      duration_min = hrs * 60 + mins;
       if (duration_min <= 0) { UI.showToast('Set duration for Longer', 'error'); return; }
     }
     const symptomList = symptoms.map(s => s === 'Other' && otherSymptom ? otherSymptom : s).filter(Boolean);

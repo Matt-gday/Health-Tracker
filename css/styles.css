@@ -295,6 +295,17 @@ a {
   color: var(--text-primary);
 }
 
+.symptom-duration-picker {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.symptom-duration-picker select {
+  flex: 1;
+  min-width: 0;
+}
+
 
 /* --- Home Screen --- */
 .home-grid {

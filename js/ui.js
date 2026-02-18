@@ -987,15 +987,15 @@ const UI = {
     const ts = event.timestamp ? this.localISOString(new Date(event.timestamp)) : this.localISOString();
     const dm = event.duration_min;
     let durationType = 'ongoing';
-    let durationTimeVal = '01:00';
+    let durationHours = 1, durationMins = 0;
     if (dm != null) {
       if (dm <= 0.75) durationType = 'seconds';
       else if (dm >= 4 && dm <= 6) durationType = 'minutes';
       else {
         durationType = 'longer';
-        const h = Math.floor(dm / 60);
-        const m = Math.round(dm % 60);
-        durationTimeVal = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        durationHours = Math.floor(dm / 60);
+        durationMins = Math.round(dm % 60);
+        durationMins = Math.round(durationMins / 5) * 5;
       }
     }
     return `
@@ -1017,9 +1017,13 @@ const UI = {
           <button class="toggle-option${durationType === 'longer' ? ' active' : ''}" data-value="longer">Longer</button>
           <button class="toggle-option${durationType === 'ongoing' ? ' active' : ''}" data-value="ongoing">Ongoing</button>
         </div>
-        <div id="symptom-edit-duration-longer" style="display:${durationType === 'longer' ? 'block' : 'none'};margin-top:8px">
-          <input type="time" class="form-input" id="symptom-edit-duration-time" value="${durationTimeVal}" step="60">
-          <span style="font-size:var(--font-sm);color:var(--text-tertiary);margin-left:8px">(hours:minutes)</span>
+        <div id="symptom-edit-duration-longer" style="display:${durationType === 'longer' ? 'block' : 'none'};margin-top:8px" class="symptom-duration-picker">
+          <select class="form-input" id="symptom-edit-duration-hours">
+            ${Array.from({ length: 25 }, (_, i) => `<option value="${i}"${i === durationHours ? ' selected' : ''}>${i} hr</option>`).join('')}
+          </select>
+          <select class="form-input" id="symptom-edit-duration-mins">
+            ${Array.from({ length: 12 }, (_, i) => i * 5).map(m => `<option value="${m}"${m === durationMins ? ' selected' : ''}>${m} min</option>`).join('')}
+          </select>
         </div>
       </div>
       <div class="form-group">
