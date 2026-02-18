@@ -197,6 +197,16 @@ const Demo = {
       afibStartTime: afib3Start, symptoms: ['Palpitations', 'Shortness of Breath'], notes: '' });
 
     // ============================================================
+    //  SYMPTOMS — lightheaded, dizzy, etc. (some align with BP/AFib days)
+    // ============================================================
+    e.push({ id: nid(), eventType: 'symptom', timestamp: ts(D.afib1, 8, 15), symptoms: ['Lightheaded'], context: ['Standing Up'], notes: '' });
+    e.push({ id: nid(), eventType: 'symptom', timestamp: ts(D.afib1, 13, 45), symptoms: ['Dizzy'], context: ['Resting/sitting'], notes: 'Before AFib started' });
+    e.push({ id: nid(), eventType: 'symptom', timestamp: ts(-5, 7, 30), symptoms: ['Lightheaded'], context: ['Just Woke/morning'], notes: '' });
+    e.push({ id: nid(), eventType: 'symptom', timestamp: ts(-5, 11, 0), symptoms: ['Blurred Vision'], context: ['Standing Up'], notes: '' });
+    e.push({ id: nid(), eventType: 'symptom', timestamp: ts(-2, 9, 15), symptoms: ['Fatigue', 'Lightheaded'], context: ['Walking/moving'], notes: '' });
+    e.push({ id: nid(), eventType: 'symptom', timestamp: ts(0, 8, 0), symptoms: ['Lightheaded'], context: ['Standing Up'], notes: '' });
+
+    // ============================================================
     //  STRESS — varied levels
     // ============================================================
     for (let day = -13; day <= 0; day++) {

@@ -246,6 +246,55 @@ a {
   font-weight: 600;
 }
 
+.tab-btn-symptom {
+  flex: 1;
+  background: linear-gradient(180deg, var(--accent-blue) 0%, var(--accent-blue-dark) 100%);
+  color: var(--text-inverse);
+  border-radius: var(--radius-md);
+  margin: 8px 4px;
+  min-height: 48px;
+}
+
+.tab-btn-symptom:hover,
+.tab-btn-symptom:active {
+  background: var(--accent-blue-dark);
+  color: var(--text-inverse);
+}
+
+.tab-btn-symptom svg {
+  width: 22px;
+  height: 22px;
+}
+
+.symptom-bp-section {
+  padding: 0 var(--space-md);
+}
+
+.symptom-bp-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-md);
+}
+
+.symptom-bp-card {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  text-align: center;
+}
+
+.symptom-bp-label {
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
+  margin-bottom: 4px;
+}
+
+.symptom-bp-value {
+  font-size: var(--font-lg);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
 /* --- Home Screen --- */
 .home-grid {
   display: grid;
@@ -572,6 +621,7 @@ a {
 .entry-item .entry-icon.med { background: var(--accent-success-light); color: var(--accent-success); }
 .entry-item .entry-icon.med-skipped { background: #FEE2E2; color: #DC2626; }
 .entry-item .entry-icon.ventolin { background: #E0E7FF; color: #4F46E5; }
+.entry-item .entry-icon.symptom { background: #D0F4F5; color: #00B3B7; }
 
 .entry-item .entry-body {
   flex: 1;
@@ -954,6 +1004,16 @@ a {
   width: 18px;
   height: 18px;
   accent-color: var(--accent-blue);
+}
+
+.checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.checkbox-group .checkbox-label {
+  margin-bottom: 0;
 }
 
 .form-input {

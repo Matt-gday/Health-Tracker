@@ -4,12 +4,15 @@
    ============================================ */
 
 const App = {
-  APP_VERSION: '2.3.3',
+  APP_VERSION: '2.3.4',
   currentTab: 'home',
   previousPages: [],
   historyFilters: ['all'],
   _fullscreenSaveHandler: null,
   _editingEventId: null,
+
+  SYMPTOM_OPTIONS: ['Lightheaded', 'Dizzy', 'Blurred Vision', 'Fatigue', 'Nausea', 'Other'],
+  CONTEXT_OPTIONS: ['Standing Up', 'Walking/moving', 'Resting/sitting', 'Lying Down', 'After Exercise', 'Just Woke/morning', 'Other'],
 
   /* ---------- Initialization ---------- */
   async init() {
@@ -243,7 +246,7 @@ const App = {
   _monthOffset: 0, // for monthly comparison navigator
   _bpContext: 'morning', // which BP context to show on chart: morning | post-walk | evening
   _cachedWalkEvents: null, // walk events cached for BP context classification
-  _weekNavTypes: ['afib', 'bp_hr', 'sleep', 'activity', 'nutrition', 'medication', 'ventolin'],
+  _weekNavTypes: ['afib', 'bp_hr', 'sleep', 'activity', 'nutrition', 'medication', 'symptom', 'ventolin'],
   _monthNavTypes: ['afib', 'ventolin'], // types that get monthly comparison
   _cachedEvents: null, // store events for week nav re-renders
 
@@ -312,7 +315,9 @@ const App = {
       case 'bp_hr': {
         events = await DataSource.getAllEvents('bp_hr', 500);
         const bpWalks = await DataSource.getAllEvents('walk', 500);
+        const symptomEvs = await DataSource.getAllEvents('symptom', 500);
         this._cachedWalkEvents = bpWalks;
+        this._cachedSymptomEvents = symptomEvs;
         stats = this._calcBpStats(events, bpWalks);
         break;
       }
@@ -350,13 +355,21 @@ const App = {
         stats = this._calcVentolinStats(events);
         break;
       }
+      case 'symptom': {
+        events = await DataSource.getAllEvents('symptom', 500);
+        events.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+        stats = this._calcSymptomStats(events);
+        break;
+      }
       default:
         events = [];
         stats = [];
     }
 
     this._cachedEvents = events;
-    UI.renderDetailPage(type, stats, events, this._weekNavTypes.includes(type) ? this._getWeekRange(this._weekOffset) : null, this._weekOffset, drinksAlcohol);
+    const symptomEventsForBp = type === 'bp_hr' ? (this._cachedSymptomEvents || []) : [];
+
+    UI.renderDetailPage(type, stats, events, this._weekNavTypes.includes(type) ? this._getWeekRange(this._weekOffset) : null, this._weekOffset, drinksAlcohol, symptomEventsForBp);
     Charts.renderDetail(type, events, drinksAlcohol);
   },
 
@@ -424,6 +437,7 @@ const App = {
         break;
       }
       case 'ventolin': stats = this._calcVentolinStats(events); break;
+      case 'symptom': stats = this._calcSymptomStats(events); break;
       default: stats = [];
     }
     // Re-render only the stats section and week nav
@@ -467,6 +481,7 @@ const App = {
         break;
       }
       case 'ventolin': events = await DataSource.getAllEvents('ventolin', 500); break;
+      case 'symptom': events = await DataSource.getAllEvents('symptom', 500); break;
       default: events = []; break;
     }
     const drinksAlcohol = (await DB.getSetting('drinksAlcohol')) === 'yes';
@@ -495,6 +510,7 @@ const App = {
       case 'afib': this.openManualAfibEntry(); break;
       case 'sleep': this.openManualSleepEntry(); break;
       case 'ventolin': this.openVentolinAddEntry(); break;
+      case 'symptom': this.openQuickSymptom(); break;
       default:
         UI.showToast('Add not available for this type', 'info');
     }
@@ -596,6 +612,62 @@ const App = {
     if (this._currentDetailType === 'ventolin') {
       await this.openDetail('ventolin', true);
     }
+  },
+
+  openQuickSymptom() {
+    const symptomOpts = this.SYMPTOM_OPTIONS.map(s => `<label class="checkbox-label"><input type="checkbox" name="symptom" value="${s}"><span>${s}</span></label>`).join('');
+    const contextOpts = this.CONTEXT_OPTIONS.map(c => `<label class="checkbox-label"><input type="checkbox" name="context" value="${c}"><span>${c}</span></label>`).join('');
+    const body = `
+      <div class="form-group">
+        <label>Symptom</label>
+        <div class="checkbox-group">${symptomOpts}</div>
+        <input type="text" class="form-input" id="symptom-other" placeholder="Other (if selected)" style="margin-top:6px;display:none">
+      </div>
+      <div class="form-group">
+        <label>What were you doing?</label>
+        <div class="checkbox-group">${contextOpts}</div>
+        <input type="text" class="form-input" id="context-other" placeholder="Other (if selected)" style="margin-top:6px;display:none">
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea class="form-input" id="symptom-notes" placeholder="Optional..."></textarea>
+      </div>`;
+    const footer = `<button class="btn btn-primary" onclick="App.saveQuickSymptom()">Record</button>`;
+    UI.openModal('Record Symptom', body, footer);
+    lucide.createIcons();
+    // Show/hide Other text fields
+    document.querySelectorAll('input[name="symptom"]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        document.getElementById('symptom-other').style.display = document.querySelector('input[name="symptom"]:checked[value="Other"]') ? 'block' : 'none';
+      });
+    });
+    document.querySelectorAll('input[name="context"]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        document.getElementById('context-other').style.display = document.querySelector('input[name="context"]:checked[value="Other"]') ? 'block' : 'none';
+      });
+    });
+  },
+
+  async saveQuickSymptom() {
+    const symptoms = [...document.querySelectorAll('input[name="symptom"]:checked')].map(cb => cb.value);
+    const contexts = [...document.querySelectorAll('input[name="context"]:checked')].map(cb => cb.value);
+    const otherSymptom = document.getElementById('symptom-other')?.value.trim();
+    const otherContext = document.getElementById('context-other')?.value.trim();
+    const notes = document.getElementById('symptom-notes')?.value.trim();
+    if (symptoms.length === 0) { UI.showToast('Select at least one symptom', 'error'); return; }
+    const symptomList = symptoms.map(s => s === 'Other' && otherSymptom ? otherSymptom : s).filter(Boolean);
+    const contextList = contexts.length > 0 ? contexts.map(c => c === 'Other' && otherContext ? otherContext : c).filter(Boolean) : [];
+    await DB.addEvent({
+      eventType: 'symptom',
+      symptoms: symptomList,
+      context: contextList,
+      notes: notes || undefined
+    });
+    UI.closeModal();
+    UI.showToast('Symptom recorded', 'success');
+    if (this.currentTab === 'history') this.refreshHistory();
+    if (this._currentDetailType === 'symptom') await this.openDetail('symptom', true);
+    if (this.currentTab === 'afib-insights') this.renderAfibInsights();
   },
 
   openNutritionAddPicker() {
@@ -1507,6 +1579,8 @@ const App = {
         this.openMedEdit(event); break;
       case 'ventolin':
         this.openVentolinEdit(event); break;
+      case 'symptom':
+        this.openSymptomEdit(event); break;
     }
 
     // If demo, make the modal read-only: disable Save, show demo banner
@@ -1614,6 +1688,49 @@ const App = {
     UI.closeModal();
     this._editingEventId = null;
     UI.showToast('Ventolin entry updated', 'success');
+    await this.renderCurrentTab();
+  },
+
+  openSymptomEdit(event) {
+    this._editingEventId = event.id;
+    const body = UI.buildEditForm(event);
+    const footer = `
+      <button class="btn btn-danger btn-sm" style="margin-bottom:8px" onclick="App.deleteCurrentEntry()">Delete Entry</button>
+      <button class="btn btn-primary" onclick="App.saveSymptomEdit()">Save</button>`;
+    UI.openModal('Edit Symptom', body, footer);
+    document.querySelectorAll('input[name="symptom"]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const el = document.getElementById('symptom-edit-other-symptom');
+        if (el) el.style.display = document.querySelector('input[name="symptom"]:checked[value="Other"]') ? 'block' : 'none';
+      });
+    });
+    document.querySelectorAll('input[name="context"]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const el = document.getElementById('symptom-edit-other-context');
+        if (el) el.style.display = document.querySelector('input[name="context"]:checked[value="Other"]') ? 'block' : 'none';
+      });
+    });
+  },
+
+  async saveSymptomEdit() {
+    const symptoms = [...document.querySelectorAll('input[name="symptom"]:checked')].map(cb => cb.value);
+    const contexts = [...document.querySelectorAll('input[name="context"]:checked')].map(cb => cb.value);
+    const otherSymptom = document.getElementById('symptom-edit-other-symptom')?.value.trim();
+    const otherContext = document.getElementById('symptom-edit-other-context')?.value.trim();
+    const notes = document.getElementById('symptom-edit-notes')?.value.trim();
+    const ts = document.getElementById('symptom-edit-timestamp')?.value;
+    if (symptoms.length === 0) { UI.showToast('Select at least one symptom', 'error'); return; }
+    const symptomList = symptoms.map(s => s === 'Other' && otherSymptom ? otherSymptom : s).filter(Boolean);
+    const contextList = contexts.map(c => c === 'Other' && otherContext ? otherContext : c).filter(Boolean);
+    await DB.updateEvent(this._editingEventId, {
+      symptoms: symptomList,
+      context: contextList,
+      notes: notes || undefined,
+      timestamp: ts ? new Date(ts).toISOString() : undefined
+    });
+    UI.closeModal();
+    this._editingEventId = null;
+    UI.showToast('Symptom updated', 'success');
     await this.renderCurrentTab();
   },
 
@@ -1741,7 +1858,7 @@ const App = {
     content.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-tertiary)">Loading insights...</div>';
 
     // Fetch all relevant data
-    const [afibEvents, bpEvents, medEvents, sleepEvents, foodEvents, drinkEvents, walkEvents, stepEvents, weightEvents, stressEvents, symptomEvents, drinksAlcohol, medications] = await Promise.all([
+    const [afibEvents, bpEvents, medEvents, sleepEvents, foodEvents, drinkEvents, walkEvents, stepEvents, weightEvents, stressEvents, afibSymptomEvents, symptomEvents, drinksAlcohol, medications] = await Promise.all([
       DataSource.getAllEvents('afib', 500),
       DataSource.getAllEvents('bp_hr', 500),
       DataSource.getAllEvents('medication', 1000),
@@ -1753,6 +1870,7 @@ const App = {
       DataSource.getAllEvents('weight', 500),
       DataSource.getAllEvents('stress', 500),
       DataSource.getAllEvents('afib_symptom', 500),
+      DataSource.getAllEvents('symptom', 500),
       DB.getSetting('drinksAlcohol').then(v => v === 'yes'),
       Demo.isActive ? Promise.resolve(Demo.getMedications()) : DB.getMedications()
     ]);
@@ -1952,6 +2070,17 @@ const App = {
         ctx += `<div class="insight-ctx-item ${isClose ? 'insight-ctx-warn' : 'insight-ctx-ok'}"><span class="insight-ctx-icon">🚶</span><span>${walkDur}min walk, ${timeAgoStr}</span></div>`;
       }
 
+      // Symptoms in 24h before episode
+      const preSymptoms = symptomEvents.filter(e => {
+        const t = new Date(e.timestamp).getTime();
+        return t < epStartMs && t > (epStartMs - 24 * 3600000);
+      });
+      if (preSymptoms.length > 0) {
+        const symptomSummary = preSymptoms.flatMap(e => e.symptoms || []).filter(Boolean);
+        const unique = [...new Set(symptomSummary)];
+        ctx += `<div class="insight-ctx-item insight-ctx-warn"><span class="insight-ctx-icon">🩺</span><span>${preSymptoms.length} symptom${preSymptoms.length > 1 ? 's' : ''} in 24h before: ${unique.join(', ')}</span></div>`;
+      }
+
       // Food before
       if (preFoodCal > 500) {
         ctx += `<div class="insight-ctx-item insight-ctx-warn"><span class="insight-ctx-icon">🍽️</span><span>Large meal: ${Math.round(preFoodCal)} kcal in prior 4h</span></div>`;
@@ -1993,7 +2122,7 @@ const App = {
       const onsetCtx = ep.onsetContext && ep.onsetContext.length > 0 ? ep.onsetContext.join(', ') : '';
 
       // Symptoms logged during this episode
-      const epSymptoms = symptomEvents.filter(e => e.afibStartTime === ep.startTime || e.afibStartTime === ep.timestamp);
+      const epSymptoms = afibSymptomEvents.filter(e => e.afibStartTime === ep.startTime || e.afibStartTime === ep.timestamp);
       const symptomList = epSymptoms.flatMap(e => e.symptoms || []);
       const uniqueSymptoms = [...new Set(symptomList)];
 
@@ -2212,16 +2341,16 @@ const App = {
     // Most common symptoms (from afib_symptom events)
     const symptomCounts = {};
     recent90.forEach(ep => {
-      const epSymptoms = symptomEvents.filter(e => e.afibStartTime === ep.startTime || e.afibStartTime === ep.timestamp);
+      const epSymptoms = afibSymptomEvents.filter(e => e.afibStartTime === ep.startTime || e.afibStartTime === ep.timestamp);
       epSymptoms.flatMap(e => e.symptoms || []).forEach(s => {
         symptomCounts[s] = (symptomCounts[s] || 0) + 1;
       });
     });
     const topSymptom = Object.entries(symptomCounts).sort((a, b) => b[1] - a[1])[0];
-    const epsWithSymptoms = recent90.filter(ep => symptomEvents.some(e => (e.afibStartTime === ep.startTime || e.afibStartTime === ep.timestamp) && (e.symptoms || []).length > 0));
+    const epsWithSymptoms = recent90.filter(ep => afibSymptomEvents.some(e => (e.afibStartTime === ep.startTime || e.afibStartTime === ep.timestamp) && (e.symptoms || []).length > 0));
     if (topSymptom && epsWithSymptoms.length > 0) {
       const epCountWithSymptom = epsWithSymptoms.filter(ep => {
-        const epS = symptomEvents.filter(e => e.afibStartTime === ep.startTime || e.afibStartTime === ep.timestamp);
+        const epS = afibSymptomEvents.filter(e => e.afibStartTime === ep.startTime || e.afibStartTime === ep.timestamp);
         return epS.some(e => (e.symptoms || []).includes(topSymptom[0]));
       }).length;
       const pct = Math.round(epCountWithSymptom / epsWithSymptoms.length * 100) || 0;
@@ -2377,6 +2506,17 @@ const App = {
         if (dayM.some(m => m.status === 'Skipped')) mgMissedCount++;
       });
       if (mgMissedCount > 0) triggers.push({ label: 'Magnesium missed', pct: Math.round(mgMissedCount / recent90.length * 100), icon: '🧪', color: '#059669' });
+      // Symptoms in 24h before
+      let symptomBeforeCount = 0;
+      recent90.forEach(ep => {
+        const epMs = new Date(ep.startTime || ep.timestamp).getTime();
+        const hasSymptom = symptomEvents.some(e => {
+          const t = new Date(e.timestamp).getTime();
+          return t < epMs && t > (epMs - 24 * 3600000);
+        });
+        if (hasSymptom) symptomBeforeCount++;
+      });
+      if (symptomBeforeCount > 0) triggers.push({ label: 'Symptoms in 24h before', pct: Math.round(symptomBeforeCount / recent90.length * 100), icon: '🩺', color: '#00B3B7' });
 
       // Onset context triggers — e.g. "Resting at onset" in X% of episodes
       const onsetTriggerEpisodes = {};
@@ -3531,6 +3671,27 @@ const App = {
       rightIsCurrent: this._monthOffset === 0,
       monthOffset: this._monthOffset
     };
+    return stats;
+  },
+
+  _calcSymptomStats(events) {
+    const week = this._getWeekRange(this._weekOffset);
+    const prev = this._getWeekRange(this._weekOffset + 1);
+    const weekEvents = this._eventsInWeek(events, week);
+    const prevEvents = this._eventsInWeek(events, prev);
+    const weekTotal = weekEvents.length;
+    const prevTotal = prevEvents.length;
+    // Count by symptom type
+    const symptomCounts = {};
+    weekEvents.forEach(e => {
+      (e.symptoms || []).forEach(s => { symptomCounts[s] = (symptomCounts[s] || 0) + 1; });
+    });
+    const topSymptom = Object.entries(symptomCounts).sort((a, b) => b[1] - a[1])[0];
+    const stats = [
+      { label: 'This Week', value: weekTotal, ...this._vsBadge(weekTotal, prevTotal, true) },
+      { label: 'Most Common', value: topSymptom ? `${topSymptom[0]} (${topSymptom[1]})` : '—' },
+      { label: 'Last 7 Days', value: new Set(weekEvents.map(e => UI.localDateKey(e.timestamp))).size + ' days' }
+    ];
     return stats;
   }
 };

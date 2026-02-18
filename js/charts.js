@@ -11,7 +11,7 @@ const Charts = {
   _chartRanges: {
     afib: 'month', bp_hr: 'month', sleep: 'month', weight: 'month',
     activity: 'month', food: 'week', drink: 'week', nutrition: 'week', medication: 'month',
-    ventolin: 'month'
+    symptom: 'month', ventolin: 'month'
   },
 
   /* Convert an ISO timestamp to a local YYYY-MM-DD string */
@@ -136,6 +136,9 @@ const Charts = {
         break;
       case 'ventolin':
         config = this._buildVentolinChart(events);
+        break;
+      case 'symptom':
+        config = this._buildSymptomChart(events);
         break;
       default:
         return;
@@ -885,6 +888,74 @@ const Charts = {
             title: { display: true, text: 'Uses', font: { size: 10 } },
             beginAtZero: true
           }
+        }
+      }
+    };
+  },
+
+  _buildSymptomChart(events) {
+    const symptomEvents = events.filter(e => e.eventType === 'symptom');
+    const days = this._rangeDayLabels('symptom');
+    const byDay = {};
+    symptomEvents.forEach(e => {
+      const dk = this._localDateKey(e.timestamp);
+      if (!byDay[dk]) byDay[dk] = [];
+      byDay[dk].push(e);
+    });
+    const countData = days.map(day => (byDay[day] || []).length);
+    const rollingAvg = [];
+    days.forEach((_, i) => {
+      const start = Math.max(0, i - 6);
+      let sum = 0;
+      for (let j = start; j <= i; j++) sum += countData[j] || 0;
+      const window = i - start + 1;
+      rollingAvg.push(window >= 7 ? +(sum / 7).toFixed(1) : null);
+    });
+    const labels = days.map(d => {
+      const dt = new Date(d + 'T12:00:00');
+      return dt.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric' });
+    });
+    return {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Symptoms',
+            data: countData,
+            backgroundColor: 'rgba(0,179,183,0.6)',
+            borderColor: '#00B3B7',
+            borderRadius: 4,
+            borderWidth: 1
+          },
+          {
+            label: '7-Day Avg',
+            type: 'line',
+            data: rollingAvg,
+            borderColor: '#F59E0B',
+            borderWidth: 2,
+            borderDash: [4, 3],
+            pointRadius: 0,
+            fill: false,
+            tension: 0.3,
+            spanGaps: true,
+            order: 0
+          }
+        ]
+      },
+      options: {
+        ...this._defaultChartOptions(),
+        plugins: {
+          legend: this._consistentLegend(),
+          tooltip: {
+            backgroundColor: '#1A1A2E',
+            titleFont: { size: 12 },
+            bodyFont: { size: 11 }
+          }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { font: { size: 9 }, maxRotation: 45, minRotation: 45, maxTicksLimit: 10 } },
+          y: { grid: { color: '#F3F4F6' }, ticks: { font: { size: 10 }, stepSize: 1 }, beginAtZero: true }
         }
       }
     };

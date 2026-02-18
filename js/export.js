@@ -49,7 +49,7 @@ const Export = {
       'item_name', 'quantity', 'volume_ml', 'calories_kcal', 'protein_g', 'carbs_g', 'fat_g', 'sodium_mg', 'caffeine_mg', 'alcohol_units',
       'med_name', 'med_dosage', 'med_status', 'med_time_of_day', 'med_afib_relevant', 'med_bp_relevant',
       'start_time', 'end_time', 'duration_min', 'onset_context', 'onset_notes', 'afib_episode_start_time',
-      'symptoms', 'stress_level', 'ventolin_context',
+      'symptoms', 'symptom_context', 'stress_level', 'ventolin_context',
       'bp_med_context', 'bp_mins_since_meds', 'bp_category', 'bp_walk_context', 'bp_food_context', 'bp_caffeine_context',
       'is_during_afib', 'notes', 'was_edited'
     ];
@@ -64,7 +64,7 @@ const Export = {
         item_name: '', quantity: '', volume_ml: '', calories_kcal: '', protein_g: '', carbs_g: '', fat_g: '', sodium_mg: '', caffeine_mg: '', alcohol_units: '',
         med_name: '', med_dosage: '', med_status: '', med_time_of_day: '', med_afib_relevant: '', med_bp_relevant: '',
         start_time: '', end_time: '', duration_min: '', onset_context: '', onset_notes: '', afib_episode_start_time: '',
-        symptoms: '', stress_level: '', ventolin_context: '',
+        symptoms: '', symptom_context: '', stress_level: '', ventolin_context: '',
         bp_med_context: '', bp_mins_since_meds: '', bp_category: '', bp_walk_context: '', bp_food_context: '', bp_caffeine_context: '',
         is_during_afib: e.isDuringAFib ? 'true' : 'false',
         notes: (e.notes || '').replace(/"/g, '""'),
@@ -142,6 +142,10 @@ const Export = {
         case 'afib_symptom':
           obj.afib_episode_start_time = e.afibStartTime || '';
           obj.symptoms = Array.isArray(e.symptoms) ? e.symptoms.join('; ') : (e.symptoms || '');
+          break;
+        case 'symptom':
+          obj.symptoms = Array.isArray(e.symptoms) ? e.symptoms.join('; ') : (e.symptoms || '');
+          obj.symptom_context = Array.isArray(e.context) ? e.context.join('; ') : (e.context || '');
           break;
         case 'stress':
           obj.stress_level = e.level || '';

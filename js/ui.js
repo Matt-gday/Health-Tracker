@@ -308,6 +308,7 @@ const UI = {
       { key: 'food', label: 'Food' },
       { key: 'drink', label: 'Drink' },
       { key: 'medication', label: 'Meds' },
+      { key: 'symptom', label: 'Symptoms' },
       { key: 'ventolin', label: 'Ventolin' }
     ];
 
@@ -526,6 +527,12 @@ const UI = {
           icon: 'heart-pulse', iconClass: 'afib',
           title: 'AFib Symptoms',
           subtitle: (event.symptoms || []).join(', ') || event.notes || ''
+        };
+      case 'symptom':
+        return {
+          icon: 'stethoscope', iconClass: 'symptom',
+          title: 'Symptom',
+          subtitle: [(event.symptoms || []).join(', '), (event.context || []).join(', ')].filter(Boolean).join(' · ') || event.notes || ''
         };
       case 'stress':
         return {
@@ -865,6 +872,8 @@ const UI = {
         return this._buildMedEditForm(event);
       case 'ventolin':
         return this._buildVentolinEditForm(event);
+      case 'symptom':
+        return this._buildSymptomEditForm(event);
       default:
         return '<p>Unknown event type.</p>';
     }
@@ -948,6 +957,43 @@ const UI = {
       <div class="form-group">
         <label>Notes</label>
         <textarea class="form-input" id="ventolin-edit-notes" placeholder="Optional notes...">${event.notes || ''}</textarea>
+      </div>`;
+  },
+
+  _buildSymptomEditForm(event) {
+    const symptomOpts = (typeof App !== 'undefined' ? App.SYMPTOM_OPTIONS : ['Lightheaded', 'Dizzy', 'Blurred Vision', 'Fatigue', 'Nausea', 'Other']).map(s => {
+      const symptoms = event.symptoms || [];
+      const isOther = s === 'Other' && symptoms.some(x => !['Lightheaded', 'Dizzy', 'Blurred Vision', 'Fatigue', 'Nausea', 'Other'].includes(x));
+      const checked = symptoms.includes(s) || isOther;
+      return `<label class="checkbox-label"><input type="checkbox" name="symptom" value="${s}" ${checked ? 'checked' : ''}><span>${s}</span></label>`;
+    }).join('');
+    const contextOpts = (typeof App !== 'undefined' ? App.CONTEXT_OPTIONS : ['Standing Up', 'Walking/moving', 'Resting/sitting', 'Lying Down', 'After Exercise', 'Just Woke/morning', 'Other']).map(c => {
+      const contexts = event.context || [];
+      const isOther = c === 'Other' && contexts.some(x => !['Standing Up', 'Walking/moving', 'Resting/sitting', 'Lying Down', 'After Exercise', 'Just Woke/morning', 'Other'].includes(x));
+      const checked = contexts.includes(c) || isOther;
+      return `<label class="checkbox-label"><input type="checkbox" name="context" value="${c}" ${checked ? 'checked' : ''}><span>${c}</span></label>`;
+    }).join('');
+    const otherSymptom = (event.symptoms || []).find(s => !['Lightheaded', 'Dizzy', 'Blurred Vision', 'Fatigue', 'Nausea', 'Other'].includes(s)) || '';
+    const otherContext = (event.context || []).find(c => !['Standing Up', 'Walking/moving', 'Resting/sitting', 'Lying Down', 'After Exercise', 'Just Woke/morning', 'Other'].includes(c)) || '';
+    const ts = event.timestamp ? this.localISOString(new Date(event.timestamp)) : this.localISOString();
+    return `
+      <div class="form-group">
+        <label>Symptom</label>
+        <div class="checkbox-group">${symptomOpts}</div>
+        <input type="text" class="form-input" id="symptom-edit-other-symptom" placeholder="Other (if selected)" value="${otherSymptom}" style="margin-top:6px;${otherSymptom ? '' : 'display:none'}">
+      </div>
+      <div class="form-group">
+        <label>What were you doing?</label>
+        <div class="checkbox-group">${contextOpts}</div>
+        <input type="text" class="form-input" id="symptom-edit-other-context" placeholder="Other (if selected)" value="${otherContext}" style="margin-top:6px;${otherContext ? '' : 'display:none'}">
+      </div>
+      <div class="form-group">
+        <label>Date & Time</label>
+        <input type="datetime-local" class="form-input" id="symptom-edit-timestamp" value="${ts}">
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea class="form-input" id="symptom-edit-notes" placeholder="Optional...">${event.notes || ''}</textarea>
       </div>`;
   },
 
@@ -1112,13 +1158,14 @@ const UI = {
   },
 
   /* ---------- Detail Page Builder ---------- */
-  renderDetailPage(type, stats, events, weekRange = null, weekOffset = 0, drinksAlcohol = false) {
+  renderDetailPage(type, stats, events, weekRange = null, weekOffset = 0, drinksAlcohol = false, symptomEventsForBp = []) {
     this._drinksAlcohol = drinksAlcohol;
     const content = document.getElementById('detail-content');
     const titleEl = document.getElementById('detail-title');
     const titles = {
       afib: 'AFib', bp_hr: 'Blood Pressure / HR', sleep: 'Sleep',
       weight: 'Weight', activity: 'Activity', food: 'Food',
+      symptom: 'Symptoms',
       drink: 'Drinks', nutrition: 'Nutrition', medication: 'Medication',
       ventolin: 'Ventolin'
     };
@@ -1159,7 +1206,7 @@ const UI = {
     }
 
     // Time range filter for all chart types
-    const chartTypes = ['afib', 'bp_hr', 'sleep', 'weight', 'activity', 'nutrition', 'medication', 'ventolin'];
+    const chartTypes = ['afib', 'bp_hr', 'sleep', 'weight', 'activity', 'nutrition', 'medication', 'symptom', 'ventolin'];
     if (chartTypes.includes(type)) {
       const ranges = [
         { key: 'week', label: '7 Days' },
@@ -1176,7 +1223,54 @@ const UI = {
     // Chart placeholder
     html += '<div class="chart-container"><canvas id="detail-chart"></canvas></div>';
 
-    
+    // Symptom-BP correlation (only for BP detail)
+    if (type === 'bp_hr' && symptomEventsForBp && symptomEventsForBp.length > 0) {
+      const bpByDay = {};
+      events.forEach(e => {
+        const dk = this.localDateKey(e.timestamp);
+        if (!bpByDay[dk]) bpByDay[dk] = [];
+        bpByDay[dk].push(e);
+      });
+      const symptomDays = new Set(symptomEventsForBp.map(e => this.localDateKey(e.timestamp)));
+      const daysWithBoth = [...symptomDays].filter(dk => bpByDay[dk] && bpByDay[dk].length > 0);
+      if (daysWithBoth.length > 0) {
+        let sysWith = 0, diaWith = 0, nSysWith = 0, nDiaWith = 0, nWith = 0;
+        let sysWithout = 0, diaWithout = 0, nSysWithout = 0, nDiaWithout = 0, nWithout = 0;
+        Object.entries(bpByDay).forEach(([dk, bps]) => {
+          const withSys = bps.filter(b => b.systolic);
+          const withDia = bps.filter(b => b.diastolic);
+          const avgSys = withSys.length ? withSys.reduce((s, b) => s + b.systolic, 0) / withSys.length : null;
+          const avgDia = withDia.length ? withDia.reduce((s, b) => s + b.diastolic, 0) / withDia.length : null;
+          if (symptomDays.has(dk)) {
+            if (avgSys != null) { sysWith += avgSys; nSysWith++; }
+            if (avgDia != null) { diaWith += avgDia; nDiaWith++; }
+            nWith++;
+          } else {
+            if (avgSys != null) { sysWithout += avgSys; nSysWithout++; }
+            if (avgDia != null) { diaWithout += avgDia; nDiaWithout++; }
+            nWithout++;
+          }
+        });
+        const sysWithAvg = nSysWith > 0 ? Math.round(sysWith / nSysWith) : '—';
+        const diaWithAvg = nDiaWith > 0 ? Math.round(diaWith / nDiaWith) : '—';
+        const sysWithoutAvg = nSysWithout > 0 ? Math.round(sysWithout / nSysWithout) : '—';
+        const diaWithoutAvg = nDiaWithout > 0 ? Math.round(diaWithout / nDiaWithout) : '—';
+        html += `<div class="symptom-bp-section">
+          <div class="section-title" style="margin-top:var(--space-md)">Symptom & BP</div>
+          <p style="font-size:var(--font-sm);color:var(--text-tertiary);margin-bottom:var(--space-sm)">Days when you logged both symptoms and BP</p>
+          <div class="symptom-bp-grid">
+            <div class="symptom-bp-card">
+              <div class="symptom-bp-label">On symptom days (${nWith})</div>
+              <div class="symptom-bp-value">${sysWithAvg}/${diaWithAvg}</div>
+            </div>
+            <div class="symptom-bp-card">
+              <div class="symptom-bp-label">Other days (${nWithout})</div>
+              <div class="symptom-bp-value">${sysWithoutAvg}/${diaWithoutAvg}</div>
+            </div>
+          </div>
+        </div>`;
+      }
+    }
 
     // Events list — grouped by local date (sleep uses wake time)
     if (events && events.length > 0) {
