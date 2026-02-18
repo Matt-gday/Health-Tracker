@@ -4,7 +4,7 @@
    ============================================ */
 
 const App = {
-  APP_VERSION: '2.3.2',
+  APP_VERSION: '2.3.3',
   currentTab: 'home',
   previousPages: [],
   historyFilters: ['all'],
@@ -2056,13 +2056,20 @@ const App = {
     const sleepAfib = sleepForDates(afibDates);
     const sleepNon = sleepForDates(nonAfibDates);
 
-    // Med adherence comparison
-    const medAdherenceForDates = (dates) => {
+    // Med adherence comparison (overall + AFib meds + BP meds)
+    const medLookupComp = (medications || []).reduce((acc, m) => { acc[m.name] = m; return acc; }, {});
+    const medAdherenceForDates = (dates, filter) => {
       if (dates.length === 0) return null;
       const dayStats = dates.map(dk => {
         const dayM = medEvents.filter(m => UI.localDateKey(m.timestamp) === dk);
-        if (dayM.length === 0) return null;
-        return { taken: dayM.filter(m => m.status === 'Taken').length, total: dayM.length };
+        const filtered = filter ? dayM.filter(m => {
+          const info = medLookupComp[m.medName || m.name] || {};
+          if (filter === 'afib') return info.afibRelevant;
+          if (filter === 'bp') return info.bpRelevant;
+          return true;
+        }) : dayM;
+        if (filtered.length === 0) return null;
+        return { taken: filtered.filter(m => m.status === 'Taken').length, total: filtered.length };
       }).filter(d => d !== null);
       if (dayStats.length === 0) return null;
       const taken = dayStats.reduce((s, d) => s + d.taken, 0);
@@ -2071,6 +2078,10 @@ const App = {
     };
     const medAfib = medAdherenceForDates(afibDates);
     const medNon = medAdherenceForDates(nonAfibDates);
+    const afibMedAfib = medAdherenceForDates(afibDates, 'afib');
+    const afibMedNon = medAdherenceForDates(nonAfibDates, 'afib');
+    const bpMedAfib = medAdherenceForDates(afibDates, 'bp');
+    const bpMedNon = medAdherenceForDates(nonAfibDates, 'bp');
 
     // BP comparison (systolic and diastolic)
     const bpAvgForDates = (dates, field) => {
@@ -2165,6 +2176,8 @@ const App = {
     html += buildCompRow('☕', 'Avg Caffeine', caffAfib, caffNon, 'mg', true);
     html += buildCompRow('🌙', 'Avg Sleep', sleepAfib, sleepNon, 'h', false);
     html += buildCompRow('💊', 'Med Adherence', medAfib, medNon, '%', false);
+    if (afibMedAfib !== null || afibMedNon !== null) html += buildCompRow('💊', 'AFib Med Adherence', afibMedAfib, afibMedNon, '%', false);
+    if (bpMedAfib !== null || bpMedNon !== null) html += buildCompRow('🩺', 'BP Med Adherence', bpMedAfib, bpMedNon, '%', false);
     html += buildCompRow('🩺', 'Avg Systolic', sysAfib, sysNon, '', true);
     html += buildCompRow('🩺', 'Avg Diastolic', diaAfib, diaNon, '', true);
     html += buildCompRow('💧', 'Avg Fluid', fluidAfib, fluidNon, 'mL', false);
@@ -2248,7 +2261,7 @@ const App = {
         const dayM = medEvents.filter(m => UI.localDateKey(m.timestamp) === dk || UI.localDateKey(m.timestamp) === prevDk);
         if (dayM.some(m => m.status === 'Skipped')) missedCount++;
       });
-      if (missedCount > 0 && missedAfibCount === 0) triggers.push({ label: 'Missed medication', pct: Math.round(missedCount / recent90.length * 100), icon: '💊', color: '#F59E0B' });
+      if (missedCount > 0 && missedAfibCount === 0 && missedBpCount === 0) triggers.push({ label: 'Missed medication', pct: Math.round(missedCount / recent90.length * 100), icon: '💊', color: '#F59E0B' });
 
       // High caffeine (above non-afib average)
       if (caffNon !== null) {
