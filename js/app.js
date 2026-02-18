@@ -4,7 +4,7 @@
    ============================================ */
 
 const App = {
-  APP_VERSION: '2.3.7',
+  APP_VERSION: '2.3.8',
   currentTab: 'home',
   previousPages: [],
   historyFilters: ['all'],
@@ -1630,6 +1630,8 @@ const App = {
         this.openVentolinEdit(event); break;
       case 'symptom':
         this.openSymptomEdit(event); break;
+      case 'stress':
+        this.openStressEdit(event); break;
     }
 
     // If demo, make the modal read-only: disable Save, show demo banner
@@ -1737,6 +1739,39 @@ const App = {
     UI.closeModal();
     this._editingEventId = null;
     UI.showToast('Ventolin entry updated', 'success');
+    await this.renderCurrentTab();
+  },
+
+  _setStressEditLevel(level) {
+    const hidden = document.getElementById('stress-edit-level');
+    if (hidden) hidden.value = level;
+    document.querySelectorAll('#stress-edit-dots .stress-dot').forEach(d => {
+      d.classList.toggle('active', parseInt(d.dataset.level) === level);
+    });
+  },
+
+  openStressEdit(event) {
+    this._editingEventId = event.id;
+    const body = UI.buildEditForm(event);
+    const footer = `
+      <button class="btn btn-danger btn-sm" style="margin-bottom:8px" onclick="App.deleteCurrentEntry()">Delete Entry</button>
+      <button class="btn btn-primary" onclick="App.saveStressEdit()">Save</button>`;
+    UI.openModal('Edit Stress Level', body, footer);
+  },
+
+  async saveStressEdit() {
+    const level = parseInt(document.getElementById('stress-edit-level')?.value || '3', 10) || 3;
+    const ts = document.getElementById('stress-edit-timestamp')?.value;
+    const notes = document.getElementById('stress-edit-notes')?.value.trim();
+    if (!ts) { UI.showToast('Please set date & time', 'error'); return; }
+    await DB.updateEvent(this._editingEventId, {
+      level: Math.max(1, Math.min(5, level)),
+      timestamp: new Date(ts).toISOString(),
+      notes: notes || undefined
+    });
+    UI.closeModal();
+    this._editingEventId = null;
+    UI.showToast('Stress level updated', 'success');
     await this.renderCurrentTab();
   },
 

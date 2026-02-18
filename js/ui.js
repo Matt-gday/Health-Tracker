@@ -883,6 +883,8 @@ const UI = {
         return this._buildVentolinEditForm(event);
       case 'symptom':
         return this._buildSymptomEditForm(event);
+      case 'stress':
+        return this._buildStressEditForm(event);
       default:
         return '<p>Unknown event type.</p>';
     }
@@ -1033,6 +1035,27 @@ const UI = {
       <div class="form-group">
         <label>Notes</label>
         <textarea class="form-input" id="symptom-edit-notes" placeholder="Optional...">${event.notes || ''}</textarea>
+      </div>`;
+  },
+
+  _buildStressEditForm(event) {
+    const ts = event.timestamp ? this.localISOString(new Date(event.timestamp)) : this.localISOString();
+    const level = event.level || 3;
+    return `
+      <div class="form-group">
+        <label>Stress Level (1–5)</label>
+        <div class="stress-dots" id="stress-edit-dots">
+          ${[1, 2, 3, 4, 5].map(n => `<button type="button" class="stress-dot${n === level ? ' active' : ''}" data-level="${n}" onclick="App._setStressEditLevel(${n})">${n}</button>`).join('')}
+        </div>
+        <input type="hidden" id="stress-edit-level" value="${level}">
+      </div>
+      <div class="form-group">
+        <label>Date & Time</label>
+        <input type="datetime-local" class="form-input" id="stress-edit-timestamp" value="${ts}">
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea class="form-input" id="stress-edit-notes" placeholder="Optional...">${event.notes || ''}</textarea>
       </div>`;
   },
 
