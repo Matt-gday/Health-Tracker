@@ -532,7 +532,16 @@ const UI = {
         return {
           icon: 'stethoscope', iconClass: 'symptom',
           title: 'Symptom',
-          subtitle: [(event.symptoms || []).join(', '), (event.context || []).join(', ')].filter(Boolean).join(' · ') || event.notes || ''
+          subtitle: (() => {
+          const parts = [(event.symptoms || []).join(', '), (event.context || []).join(', ')];
+          const dm = event.duration_min;
+          if (dm != null) {
+            parts.push(dm < 1 ? 'Few seconds' : UI.formatDuration(dm));
+          } else {
+            parts.push('Ongoing');
+          }
+          return parts.filter(Boolean).join(' · ') || event.notes || '';
+        })()
         };
       case 'stress':
         return {
@@ -976,6 +985,18 @@ const UI = {
     const otherSymptom = (event.symptoms || []).find(s => !['Lightheaded', 'Dizzy', 'Blurred Vision', 'Fatigue', 'Nausea', 'Other'].includes(s)) || '';
     const otherContext = (event.context || []).find(c => !['Standing Up', 'Walking/moving', 'Resting/sitting', 'Lying Down', 'After Exercise', 'Just Woke/morning', 'Other'].includes(c)) || '';
     const ts = event.timestamp ? this.localISOString(new Date(event.timestamp)) : this.localISOString();
+    const dm = event.duration_min;
+    let durationType = 'ongoing';
+    let durationHours = '', durationMins = '';
+    if (dm != null) {
+      if (dm <= 0.75) durationType = 'seconds';
+      else if (dm >= 4 && dm <= 6) durationType = 'minutes';
+      else {
+        durationType = 'longer';
+        durationHours = String(Math.floor(dm / 60));
+        durationMins = String(Math.round(dm % 60));
+      }
+    }
     return `
       <div class="form-group">
         <label>Symptom</label>
@@ -986,6 +1007,21 @@ const UI = {
         <label>What were you doing?</label>
         <div class="checkbox-group">${contextOpts}</div>
         <input type="text" class="form-input" id="symptom-edit-other-context" placeholder="Other (if selected)" value="${otherContext}" style="margin-top:6px;${otherContext ? '' : 'display:none'}">
+      </div>
+      <div class="form-group">
+        <label>How long did it last?</label>
+        <div class="toggle-group" id="symptom-edit-duration-type">
+          <button class="toggle-option${durationType === 'seconds' ? ' active' : ''}" data-value="seconds">Few seconds</button>
+          <button class="toggle-option${durationType === 'minutes' ? ' active' : ''}" data-value="minutes">Few minutes</button>
+          <button class="toggle-option${durationType === 'longer' ? ' active' : ''}" data-value="longer">Longer</button>
+          <button class="toggle-option${durationType === 'ongoing' ? ' active' : ''}" data-value="ongoing">Ongoing</button>
+        </div>
+        <div id="symptom-edit-duration-longer" style="display:${durationType === 'longer' ? 'flex' : 'none'};margin-top:8px" class="symptom-duration-longer-row">
+          <input type="number" class="form-input" id="symptom-edit-duration-hours" placeholder="H" min="0" max="24" value="${durationHours}" style="width:60px;text-align:center">
+          <span>hr</span>
+          <input type="number" class="form-input" id="symptom-edit-duration-mins" placeholder="M" min="0" max="59" value="${durationMins}" style="width:60px;text-align:center">
+          <span>min</span>
+        </div>
       </div>
       <div class="form-group">
         <label>Date & Time</label>

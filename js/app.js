@@ -4,7 +4,7 @@
    ============================================ */
 
 const App = {
-  APP_VERSION: '2.3.4',
+  APP_VERSION: '2.3.5',
   currentTab: 'home',
   previousPages: [],
   historyFilters: ['all'],
@@ -615,9 +615,14 @@ const App = {
   },
 
   openQuickSymptom() {
+    const now = UI.localISOString(new Date());
     const symptomOpts = this.SYMPTOM_OPTIONS.map(s => `<label class="checkbox-label"><input type="checkbox" name="symptom" value="${s}"><span>${s}</span></label>`).join('');
     const contextOpts = this.CONTEXT_OPTIONS.map(c => `<label class="checkbox-label"><input type="checkbox" name="context" value="${c}"><span>${c}</span></label>`).join('');
     const body = `
+      <div class="form-group">
+        <label>Date & Time</label>
+        <input type="datetime-local" class="form-input" id="symptom-timestamp" value="${now}">
+      </div>
       <div class="form-group">
         <label>Symptom</label>
         <div class="checkbox-group">${symptomOpts}</div>
@@ -629,12 +634,40 @@ const App = {
         <input type="text" class="form-input" id="context-other" placeholder="Other (if selected)" style="margin-top:6px;display:none">
       </div>
       <div class="form-group">
+        <label>How long did it last?</label>
+        <div class="toggle-group" id="symptom-duration-type" style="flex-wrap:wrap">
+          <button class="toggle-option" data-value="seconds">Few seconds</button>
+          <button class="toggle-option active" data-value="minutes">Few minutes</button>
+          <button class="toggle-option" data-value="longer">Longer</button>
+          <button class="toggle-option" data-value="ongoing">Ongoing</button>
+        </div>
+        <div id="symptom-duration-longer" style="display:none;margin-top:8px" class="symptom-duration-longer-row">
+          <input type="number" class="form-input" id="symptom-duration-hours" placeholder="H" min="0" max="24" style="width:60px;text-align:center">
+          <span>hr</span>
+          <input type="number" class="form-input" id="symptom-duration-mins" placeholder="M" min="0" max="59" style="width:60px;text-align:center">
+          <span>min</span>
+        </div>
+      </div>
+      <div class="form-group">
         <label>Notes</label>
         <textarea class="form-input" id="symptom-notes" placeholder="Optional..."></textarea>
       </div>`;
     const footer = `<button class="btn btn-primary" onclick="App.saveQuickSymptom()">Record</button>`;
     UI.openModal('Record Symptom', body, footer);
+    this.setupToggleGroupListeners();
     lucide.createIcons();
+    // Show/hide Longer duration inputs
+    setTimeout(() => {
+      const updateDurationUI = () => {
+        const val = this._getToggleValue('symptom-duration-type');
+        const longerEl = document.getElementById('symptom-duration-longer');
+        if (longerEl) longerEl.style.display = val === 'longer' ? 'flex' : 'none';
+      };
+      document.querySelectorAll('#symptom-duration-type .toggle-option').forEach(btn => {
+        btn.addEventListener('click', updateDurationUI);
+      });
+      updateDurationUI();
+    }, 50);
     // Show/hide Other text fields
     document.querySelectorAll('input[name="symptom"]').forEach(cb => {
       cb.addEventListener('change', () => {
@@ -649,16 +682,30 @@ const App = {
   },
 
   async saveQuickSymptom() {
+    const ts = document.getElementById('symptom-timestamp')?.value;
+    const durationType = this._getToggleValue('symptom-duration-type');
     const symptoms = [...document.querySelectorAll('input[name="symptom"]:checked')].map(cb => cb.value);
     const contexts = [...document.querySelectorAll('input[name="context"]:checked')].map(cb => cb.value);
     const otherSymptom = document.getElementById('symptom-other')?.value.trim();
     const otherContext = document.getElementById('context-other')?.value.trim();
     const notes = document.getElementById('symptom-notes')?.value.trim();
     if (symptoms.length === 0) { UI.showToast('Select at least one symptom', 'error'); return; }
+    if (!ts) { UI.showToast('Please set date & time', 'error'); return; }
+    let duration_min = null;
+    if (durationType === 'seconds') duration_min = 0.5;
+    else if (durationType === 'minutes') duration_min = 5;
+    else if (durationType === 'longer') {
+      const hrs = parseInt(document.getElementById('symptom-duration-hours')?.value || '0', 10) || 0;
+      const mins = parseInt(document.getElementById('symptom-duration-mins')?.value || '0', 10) || 0;
+      duration_min = hrs * 60 + mins;
+      if (duration_min <= 0) { UI.showToast('Enter duration for Longer', 'error'); return; }
+    }
     const symptomList = symptoms.map(s => s === 'Other' && otherSymptom ? otherSymptom : s).filter(Boolean);
     const contextList = contexts.length > 0 ? contexts.map(c => c === 'Other' && otherContext ? otherContext : c).filter(Boolean) : [];
     await DB.addEvent({
       eventType: 'symptom',
+      timestamp: new Date(ts).toISOString(),
+      duration_min: duration_min,
       symptoms: symptomList,
       context: contextList,
       notes: notes || undefined
@@ -1698,6 +1745,17 @@ const App = {
       <button class="btn btn-danger btn-sm" style="margin-bottom:8px" onclick="App.deleteCurrentEntry()">Delete Entry</button>
       <button class="btn btn-primary" onclick="App.saveSymptomEdit()">Save</button>`;
     UI.openModal('Edit Symptom', body, footer);
+    this.setupToggleGroupListeners();
+    setTimeout(() => {
+      const updateDurationUI = () => {
+        const val = this._getToggleValue('symptom-edit-duration-type');
+        const longerEl = document.getElementById('symptom-edit-duration-longer');
+        if (longerEl) longerEl.style.display = val === 'longer' ? 'flex' : 'none';
+      };
+      document.querySelectorAll('#symptom-edit-duration-type .toggle-option').forEach(btn => {
+        btn.addEventListener('click', updateDurationUI);
+      });
+    }, 50);
     document.querySelectorAll('input[name="symptom"]').forEach(cb => {
       cb.addEventListener('change', () => {
         const el = document.getElementById('symptom-edit-other-symptom');
@@ -1713,6 +1771,7 @@ const App = {
   },
 
   async saveSymptomEdit() {
+    const durationType = this._getToggleValue('symptom-edit-duration-type');
     const symptoms = [...document.querySelectorAll('input[name="symptom"]:checked')].map(cb => cb.value);
     const contexts = [...document.querySelectorAll('input[name="context"]:checked')].map(cb => cb.value);
     const otherSymptom = document.getElementById('symptom-edit-other-symptom')?.value.trim();
@@ -1720,11 +1779,21 @@ const App = {
     const notes = document.getElementById('symptom-edit-notes')?.value.trim();
     const ts = document.getElementById('symptom-edit-timestamp')?.value;
     if (symptoms.length === 0) { UI.showToast('Select at least one symptom', 'error'); return; }
+    let duration_min = null;
+    if (durationType === 'seconds') duration_min = 0.5;
+    else if (durationType === 'minutes') duration_min = 5;
+    else if (durationType === 'longer') {
+      const hrs = parseInt(document.getElementById('symptom-edit-duration-hours')?.value || '0', 10) || 0;
+      const mins = parseInt(document.getElementById('symptom-edit-duration-mins')?.value || '0', 10) || 0;
+      duration_min = hrs * 60 + mins;
+      if (duration_min <= 0) { UI.showToast('Enter duration for Longer', 'error'); return; }
+    }
     const symptomList = symptoms.map(s => s === 'Other' && otherSymptom ? otherSymptom : s).filter(Boolean);
     const contextList = contexts.map(c => c === 'Other' && otherContext ? otherContext : c).filter(Boolean);
     await DB.updateEvent(this._editingEventId, {
       symptoms: symptomList,
       context: contextList,
+      duration_min: duration_min,
       notes: notes || undefined,
       timestamp: ts ? new Date(ts).toISOString() : undefined
     });

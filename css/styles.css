@@ -295,6 +295,12 @@ a {
   color: var(--text-primary);
 }
 
+.symptom-duration-longer-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 /* --- Home Screen --- */
 .home-grid {
   display: grid;
