@@ -793,9 +793,18 @@ const UI = {
   },
 
   /* ---------- Medication Checklist ---------- */
-  buildMedChecklist(medications, timeOfDay) {
+  buildMedChecklist(medications, schedule, defaultSchedule) {
+    const isMorning = schedule === 'Morning';
+    const timeOfDayLabel = isMorning ? 'Morning' : 'Evening';
     if (medications.length === 0) {
-      return `<div class="empty-state"><i data-lucide="pill"></i><p>No medications configured for ${timeOfDay}.<br>Add them in Settings.</p></div>`;
+      return `<div class="med-checklist-period">
+        <label style="font-size:var(--font-sm);font-weight:600;margin-bottom:8px;display:block">Logging for</label>
+        <div class="toggle-group" id="med-checklist-period">
+          <button class="toggle-option${defaultSchedule === 'Morning' ? ' active' : ''}" data-schedule="Morning" data-am-pm="AM">Morning</button>
+          <button class="toggle-option${defaultSchedule === 'Evening' ? ' active' : ''}" data-schedule="Evening" data-am-pm="PM">Evening</button>
+        </div>
+      </div>
+      <div id="med-checklist-list"><div class="empty-state"><i data-lucide="pill"></i><p>No medications configured for ${timeOfDayLabel}.<br>Add them in Settings.</p></div></div>`;
     }
     const listHtml = medications.map((med, i) => `
       <div class="med-item">
@@ -809,10 +818,17 @@ const UI = {
       </div>`).join('');
 
     return `
-      <p style="font-size:var(--font-sm);color:var(--text-secondary);margin-bottom:var(--space-md);">
-        ${timeOfDay} medications — uncheck any you missed.
+      <div class="med-checklist-period">
+        <label style="font-size:var(--font-sm);font-weight:600;margin-bottom:8px;display:block">Logging for</label>
+        <div class="toggle-group" id="med-checklist-period">
+          <button class="toggle-option${defaultSchedule === 'Morning' ? ' active' : ''}" data-schedule="Morning" data-am-pm="AM">Morning</button>
+          <button class="toggle-option${defaultSchedule === 'Evening' ? ' active' : ''}" data-schedule="Evening" data-am-pm="PM">Evening</button>
+        </div>
+      </div>
+      <p id="med-checklist-subtitle" style="font-size:var(--font-sm);color:var(--text-secondary);margin-bottom:var(--space-md);">
+        ${timeOfDayLabel} medications — uncheck any you missed.
       </p>
-      <div class="med-list">${listHtml}</div>
+      <div id="med-checklist-list" class="med-list">${listHtml}</div>
       <div class="ventolin-section">
         <h3>Ventolin (as needed)</h3>
         <div style="display:flex;gap:var(--space-sm);margin-top:var(--space-sm);">
@@ -826,7 +842,7 @@ const UI = {
       </div>
       <div class="stress-section">
         <h3>Stress Level</h3>
-        <p style="font-size:var(--font-xs);color:var(--text-tertiary);margin:4px 0 8px">${timeOfDay === 'Morning' ? 'How stressed are you this morning?' : 'How stressed have you been today?'}</p>
+        <p id="med-checklist-stress-prompt" style="font-size:var(--font-xs);color:var(--text-tertiary);margin:4px 0 8px">${schedule === 'Morning' ? 'How stressed are you this morning?' : 'How stressed have you been today?'}</p>
         <div class="stress-dots" id="stress-dots">
           ${[1,2,3,4,5].map(n => `<button class="stress-dot" data-level="${n}" onclick="App.selectStress(${n})">${n}</button>`).join('')}
         </div>

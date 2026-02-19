@@ -4,7 +4,7 @@
    ============================================ */
 
 const App = {
-  APP_VERSION: '2.3.8',
+  APP_VERSION: '2.3.9',
   currentTab: 'home',
   previousPages: [],
   historyFilters: ['all'],
@@ -1518,14 +1518,54 @@ const App = {
   /* ---------- Medication Checklist ---------- */
   async openMedicationChecklist() {
     const hour = new Date().getHours();
-    const timeOfDay = hour < 12 ? 'AM' : 'PM';
-    const schedule = hour < 12 ? 'Morning' : 'Evening';
+    const defaultSchedule = hour < 12 ? 'Morning' : 'Evening';
+    const timeOfDay = defaultSchedule === 'Morning' ? 'AM' : 'PM';
 
-    const meds = await DB.getMedicationsBySchedule(schedule);
-    const title = `${schedule} Medications`;
-    const body = UI.buildMedChecklist(meds, schedule);
-    const footer = `<button class="btn btn-primary" onclick="App.saveMedicationChecklist('${timeOfDay}')">Confirm</button>`;
+    const meds = await DB.getMedicationsBySchedule(defaultSchedule);
+    const title = 'Medications';
+    const body = UI.buildMedChecklist(meds, defaultSchedule, defaultSchedule);
+    const footer = `<button class="btn btn-primary" onclick="App.saveMedicationChecklist()">Confirm</button>`;
     UI.openModal(title, body, footer);
+    this._attachMedChecklistPeriodListeners();
+  },
+
+  _attachMedChecklistPeriodListeners() {
+    const periodEl = document.getElementById('med-checklist-period');
+    if (!periodEl) return;
+    periodEl.querySelectorAll('.toggle-option').forEach(btn => {
+      btn.addEventListener('click', () => this.switchMedChecklistSchedule(btn.dataset.schedule));
+    });
+    lucide.createIcons();
+  },
+
+  async switchMedChecklistSchedule(schedule) {
+    const periodEl = document.getElementById('med-checklist-period');
+    if (!periodEl) return;
+    periodEl.querySelectorAll('.toggle-option').forEach(b => b.classList.toggle('active', b.dataset.schedule === schedule));
+    const subtitleEl = document.getElementById('med-checklist-subtitle');
+    if (subtitleEl) subtitleEl.textContent = `${schedule} medications — uncheck any you missed.`;
+    const stressPromptEl = document.getElementById('med-checklist-stress-prompt');
+    if (stressPromptEl) stressPromptEl.textContent = schedule === 'Morning' ? 'How stressed are you this morning?' : 'How stressed have you been today?';
+    const meds = await DB.getMedicationsBySchedule(schedule);
+    const listEl = document.getElementById('med-checklist-list');
+    if (!listEl) return;
+    if (meds.length === 0) {
+      listEl.className = '';
+      listEl.innerHTML = `<div class="empty-state"><i data-lucide="pill"></i><p>No medications configured for ${schedule}.<br>Add them in Settings.</p></div>`;
+    } else {
+      listEl.className = 'med-list';
+      listEl.innerHTML = meds.map((med, i) => `
+        <div class="med-item">
+          <div class="med-checkbox checked" id="med-check-${i}" data-med-id="${med.id}" onclick="App.toggleMedCheck(${i})">
+            <i data-lucide="check"></i>
+          </div>
+          <div class="med-info">
+            <div class="med-name">${med.name}</div>
+            <div class="med-dose">${med.dosage}</div>
+          </div>
+        </div>`).join('');
+    }
+    lucide.createIcons();
   },
 
   _selectedStress: null,
@@ -1553,7 +1593,9 @@ const App = {
     lucide.createIcons();
   },
 
-  async saveMedicationChecklist(timeOfDay) {
+  async saveMedicationChecklist() {
+    const activeBtn = document.querySelector('#med-checklist-period .toggle-option.active');
+    const timeOfDay = activeBtn ? activeBtn.dataset.amPm : (new Date().getHours() < 12 ? 'AM' : 'PM');
     const checkboxes = document.querySelectorAll('.med-checkbox');
     for (const cb of checkboxes) {
       const medId = cb.dataset.medId;

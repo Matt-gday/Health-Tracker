@@ -1293,6 +1293,9 @@ textarea.form-input {
 }
 
 /* --- Medication Checklist --- */
+.med-checklist-period {
+  margin-bottom: var(--space-md);
+}
 .med-list {
   padding: 0;
   list-style: none;
